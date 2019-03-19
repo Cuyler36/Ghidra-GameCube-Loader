@@ -2,12 +2,8 @@ package gamecubeloader.common;
 
 import java.io.BufferedReader;
 import java.io.FileReader;
-import java.io.IOException;
 import java.util.*;
-import java.util.stream.Stream;
 
-import ghidra.program.database.symbol.SymbolManager;
-import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressFactory;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
