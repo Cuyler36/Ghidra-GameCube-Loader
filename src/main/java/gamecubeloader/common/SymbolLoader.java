@@ -18,7 +18,6 @@ public class SymbolLoader {
 	private static final long UINT_MASK = 0xFFFFFFFF;
 	
 	private Program program;
-	private BufferedReader lineReader;
 	private String[] lines;
 	private List<SymbolInfo> symbols;
 	private long objectAddress = 0;
@@ -27,8 +26,7 @@ public class SymbolLoader {
 	
 	public SymbolLoader(Program program, FileReader reader, long objectAddress, int alignment, long bssAddress) {
 		this.program = program;
-		this.lineReader = new BufferedReader(reader);
-		lines = lineReader.lines().toArray(String[]::new);
+		lines = new BufferedReader(reader).lines().toArray(String[]::new);
 		this.objectAddress = objectAddress;
 		this.alignment = alignment;
 		this.bssAddress = bssAddress;
