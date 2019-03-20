@@ -48,7 +48,7 @@ public final class DOLProgramBuilder {
 			}
 			
 			for (int i = 0; i < 11; i++) {
-				memoryBlockUtil.createInitializedBlock(".text" + i, addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
+				memoryBlockUtil.createInitializedBlock(".data" + i, addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
 						provider.getInputStream(dol.dataSectionOffsets[i]), dol.dataSectionSizes[i], "", null, true, true, false, monitor);
 			}
 			
