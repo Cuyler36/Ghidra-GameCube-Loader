@@ -4,6 +4,9 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.*;
 
+import ghidra.app.util.demangler.Demangler;
+import ghidra.app.util.demangler.DemanglerOptions;
+import ghidra.app.util.demangler.DemanglerUtil;
 import ghidra.program.model.address.AddressFactory;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
@@ -13,19 +16,22 @@ import ghidra.program.model.symbol.SymbolTable;
 import ghidra.util.Msg;
 import ghidra.util.exception.DuplicateNameException;
 import ghidra.util.exception.InvalidInputException;
+import ghidra.util.task.TaskMonitor;
 
 public class SymbolLoader {
 	private static final long UINT_MASK = 0xFFFFFFFF;
 	
 	private Program program;
+	private TaskMonitor monitor;
 	private String[] lines;
 	private List<SymbolInfo> symbols;
 	private long objectAddress = 0;
 	private int alignment;
 	private long bssAddress;
 	
-	public SymbolLoader(Program program, FileReader reader, long objectAddress, int alignment, long bssAddress) {
+	public SymbolLoader(Program program, TaskMonitor monitor, FileReader reader, long objectAddress, int alignment, long bssAddress) {
 		this.program = program;
+		this.monitor = monitor;
 		lines = new BufferedReader(reader).lines().toArray(String[]::new);
 		this.objectAddress = objectAddress;
 		this.alignment = alignment;
@@ -200,6 +206,9 @@ public class SymbolLoader {
 		SymbolTable symbolTable = program.getSymbolTable();
 		Namespace globalNamespace = program.getGlobalNamespace();
 		
+		var demanglerOptions = new DemanglerOptions();
+		demanglerOptions.setApplySignature(true);
+		
 		for (SymbolInfo symbolInfo : symbols)
 		{
 			if (symbolInfo.alignment == 1) continue; // Don't bother loading these for now.
@@ -228,8 +237,21 @@ public class SymbolLoader {
 			}
 			
 			try {
-				symbolTable.createLabel(addressSpace.getAddress(symbolInfo.virtualAddress), symbolInfo.name,
+				var demangledNameObject = DemanglerUtil.demangle(symbolInfo.name);
+				var demangledName = demangledNameObject == null ? symbolInfo.name : demangledNameObject.getName();
+				symbolTable.createLabel(addressSpace.getAddress(symbolInfo.virtualAddress), demangledName,
 					objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
+				
+				// Try applying the function arguments & return type using the demangled info.
+				if (demangledNameObject != null) {
+					try {
+						demangledNameObject.applyTo(program, addressSpace.getAddress(symbolInfo.virtualAddress), demanglerOptions, monitor);
+					}
+					catch (Exception e) {
+						e.printStackTrace();
+					}
+					
+				}
 			}
 			catch (InvalidInputException e) {
 				Msg.error(this, "Symbol Loader: An error occurred when attempting to load symbol: " + symbolInfo.name);

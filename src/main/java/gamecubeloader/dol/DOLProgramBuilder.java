@@ -64,7 +64,7 @@ public final class DOLProgramBuilder {
 				
 				if (selectedFile != null) {
 					FileReader reader = new FileReader(selectedFile);
-					SymbolLoader loader = new SymbolLoader(this.program, reader, dol.textSectionMemoryAddresses[0], 32, dol.bssMemoryAddress);
+					SymbolLoader loader = new SymbolLoader(this.program, monitor, reader, dol.textSectionMemoryAddresses[0], 32, dol.bssMemoryAddress);
 					loader.ApplySymbols();
 				}
 			}
