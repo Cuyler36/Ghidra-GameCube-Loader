@@ -213,7 +213,11 @@ public class SymbolLoader {
 		{
 			if (symbolInfo.alignment == 1) continue; // Don't bother loading these for now.
 			
-			// Try getting a namespace first.
+			// Demangle name first.
+			var demangledNameObject = DemanglerUtil.demangle(symbolInfo.name);
+			var demangledName = demangledNameObject == null ? symbolInfo.name : demangledNameObject.getName();
+			
+			// Determine namespace
 			Namespace objectNamespace = null;
 			
 			try {
@@ -229,6 +233,20 @@ public class SymbolLoader {
 				if (objectNamespace == null) {
 					objectNamespace = symbolTable.createNameSpace(globalNamespace, namespaceName, SourceType.IMPORTED);
 				}
+				
+				// Now apply the demangled namespace if one exists.
+				if (demangledNameObject != null) {
+					var demangledNamespace = demangledNameObject.getNamespace();
+					
+					if (demangledNamespace != null && demangledNamespace != globalNamespace) {
+						var realNamespace = symbolTable.getNamespace(demangledNamespace.getName(), objectNamespace);
+						if (realNamespace == null) {
+							realNamespace = symbolTable.createNameSpace(objectNamespace, demangledNamespace.getName(), SourceType.IMPORTED);
+						}
+						
+						objectNamespace = realNamespace;
+					}
+				}
 			}
 			catch (DuplicateNameException | InvalidInputException e) {
 				// Do nothing. This should never throw for DuplicateNameException.
@@ -237,8 +255,6 @@ public class SymbolLoader {
 			}
 			
 			try {
-				var demangledNameObject = DemanglerUtil.demangle(symbolInfo.name);
-				var demangledName = demangledNameObject == null ? symbolInfo.name : demangledNameObject.getName();
 				symbolTable.createLabel(addressSpace.getAddress(symbolInfo.virtualAddress), demangledName,
 					objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
 				
