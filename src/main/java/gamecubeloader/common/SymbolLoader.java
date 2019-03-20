@@ -40,7 +40,7 @@ public class SymbolLoader {
 		// TODO: Some early symbol files do not contain a memory map section. Handle these.
 		for (int i = lines.length - 1; i > -1; i--) {
 			if (lines[i].contains("Memory map:")) {
-				memMapLineStartIdx = i + 3; // Add three to skip the header lines.
+				memMapLineStartIdx = i + 2; // Add three to skip the header lines.
 				break;
 			}
 		}
@@ -49,12 +49,12 @@ public class SymbolLoader {
 			// Parse the memory map info.
 			for (int i = memMapLineStartIdx; i < lines.length; i++) {
 				String line = lines[i];
-				if (line == "" || line.trim().length() == 0) {
+				if (line.equals("") || line.trim().length() == 0) {
 					break;
 				}
 				
 				// Split the string by whitespace entries.
-				String[] splitInformation = line.split("\\s+");
+				String[] splitInformation = line.trim().split("\\s+");
 				
 				// Try to parse the information.
 				
@@ -104,15 +104,16 @@ public class SymbolLoader {
 			
 			for (int i = 0; i < lines.length; i++) {
 				String line = lines[i];
-				if (line == "" || line.trim().length() == 0) continue;
+				if (line.equals("") || line.trim().length() == 0) continue;
 				
 				if (line.contains(" section layout")) {
 					String sectionName = line.substring(0, line.indexOf(" section layout")).trim();
+					Msg.info(this, "Symbol Loader: Switched to symbols for section: " + sectionName);
 					
 					// Search the info list for the section.
 					MemoryMapSectionInfo currentSectionInfo = null;
 					for (MemoryMapSectionInfo sectionInfo : memMapInfo) {
-						if (sectionInfo.name == sectionName) {
+						if (sectionInfo.name.equals(sectionName)) {
 							currentSectionInfo = sectionInfo;
 							break;
 						}
@@ -126,7 +127,7 @@ public class SymbolLoader {
 						effectiveAddress += (alignment - (effectiveAddress % alignment));
 						
 						// Check if we should switch to using the bss section address.
-						if (currentSectionInfo.name == ".bss" && bssAddress != -1) {
+						if (currentSectionInfo.name.equals(".bss") && bssAddress != -1) {
 							preBssAddress = effectiveAddress;
 							effectiveAddress = bssAddress;
 						}
@@ -135,27 +136,57 @@ public class SymbolLoader {
 							preBssAddress = 0;
 						}
 					}
+					else {
+						Msg.info(this, "Symbol Loader: No memory layout information was found for section: " + sectionName);
+					}
 					
 					i += 3; // Skip past the section column data.
 				}
 				else {
-					String[] splitInformation = line.split("\\s+");
-					if (splitInformation.length != 6) continue; // If we don't have 6 items then we've probably ran into a "entry of X" symbol. We can ignore these.
+					// We don't want to process these.
+					if (line.contains("entry of ")) continue;
 					
+					String[] splitInformation = line.trim().split("\\s+");
+					if (splitInformation.length < 6) continue;
+					
+					long startingAddress = 0;
+					long size = 0;
+					long virtualAddress = 0;
+					int objectAlignment = 0;
 					
 					try {
-						long startingAddress = Long.parseUnsignedLong(splitInformation[0], 16) & UINT_MASK;
-						long size = Long.parseUnsignedLong(splitInformation[1], 16) & UINT_MASK;
-						long virtualAddress = Long.parseUnsignedLong(splitInformation[2], 16) & UINT_MASK;
-						int objectAlignment = Integer.parseInt(splitInformation[3]);
-						
-						SymbolInfo symbolInfo = new SymbolInfo(splitInformation[4], splitInformation[5], startingAddress,
-								size, virtualAddress + effectiveAddress, objectAlignment);
-						symbols.add(symbolInfo);
+						startingAddress = Long.parseUnsignedLong(splitInformation[0], 16) & UINT_MASK;
+						size = Long.parseUnsignedLong(splitInformation[1], 16) & UINT_MASK;
+						virtualAddress = Long.parseUnsignedLong(splitInformation[2], 16) & UINT_MASK;
+					}
+					catch (Exception e) {
+						Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
+						continue;
+					}
+					
+					try {
+						objectAlignment = Integer.parseInt(splitInformation[3]);
+						if (objectAlignment == 1) continue;
 					}
 					catch (NumberFormatException e) {
-						Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
+						// Do nothing for the object alignment.
 					}
+						
+					SymbolInfo symbolInfo = null;
+					
+					if (virtualAddress >= objectAddress && virtualAddress < program.getAddressFactory().getDefaultAddressSpace().getMaxAddress().getUnsignedOffset())
+					{
+						// DOL map files sometimes have their virtual address pre-calculated.
+						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation[5], startingAddress,
+								size, virtualAddress, objectAlignment);
+					}
+					else
+					{
+						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation[5], startingAddress,
+							size, virtualAddress + effectiveAddress, objectAlignment);
+					}
+					
+					symbols.add(symbolInfo);
 				}
 			}
 		}
@@ -181,22 +212,24 @@ public class SymbolLoader {
 				int fileTypeIdx = namespaceName.lastIndexOf('.');
 				if (fileTypeIdx > -1)
 				{
-					namespaceName.substring(0, namespaceName.lastIndexOf('.'));
+					namespaceName = namespaceName.substring(0, fileTypeIdx);
 				}
 				
 				objectNamespace = symbolTable.getNamespace(namespaceName, globalNamespace);
 				
 				if (objectNamespace == null) {
-					objectNamespace = symbolTable.createNameSpace(globalNamespace, namespaceName, SourceType.DEFAULT);
+					objectNamespace = symbolTable.createNameSpace(globalNamespace, namespaceName, SourceType.IMPORTED);
 				}
 			}
 			catch (DuplicateNameException | InvalidInputException e) {
 				// Do nothing. This should never throw for DuplicateNameException.
+				Msg.error(this, "Symbol Loader: An error occurred while creating a namespace for: " + symbolInfo.container);
+				e.printStackTrace();
 			}
 			
 			try {
 				symbolTable.createLabel(addressSpace.getAddress(symbolInfo.virtualAddress), symbolInfo.name,
-					objectNamespace == null ? globalNamespace : objectNamespace, SourceType.DEFAULT);
+					objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
 			}
 			catch (InvalidInputException e) {
 				Msg.error(this, "Symbol Loader: An error occurred when attempting to load symbol: " + symbolInfo.name);

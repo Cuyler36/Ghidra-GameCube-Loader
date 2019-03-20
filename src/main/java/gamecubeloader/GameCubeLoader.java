@@ -19,6 +19,7 @@ import java.io.IOException;
 import java.util.*;
 
 import gamecubeloader.dol.DOLHeader;
+import gamecubeloader.dol.DOLProgramBuilder;
 import gamecubeloader.rel.RELHeader;
 import ghidra.app.util.Option;
 import ghidra.app.util.bin.BinaryReader;
@@ -81,12 +82,17 @@ public class GameCubeLoader extends BinaryLoader {
 			// Check for DOL first.
 			DOLHeader tempDolHeader = new DOLHeader(reader); 
 			if (tempDolHeader.CheckHeaderIsValid()) {
+				binaryType = BinaryType.DOL;
 				dolHeader = tempDolHeader;
 			}
 			else {
 				// TODO: Check for REL now.
 				RELHeader tempRelHeader = new RELHeader(reader);
 			}
+		}
+		
+		if (binaryType != null) {
+			loadSpecs.add(new LoadSpec(this, 0, new LanguageCompilerSpecPair("PowerPC:BE:32:Gekko_Broadway", "default"), true));
 		}
 		
 		return loadSpecs;
@@ -129,13 +135,13 @@ public class GameCubeLoader extends BinaryLoader {
     protected boolean loadProgramInto(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
             MessageLog messageLog, Program program, TaskMonitor monitor, MemoryConflictHandler memoryConflictHandler) 
             throws IOException {
-        BinaryReader reader = new BinaryReader(provider, false);
+        
         
         if (this.binaryType == BinaryType.DOL) {
-        	// TODO: DOL Support
+        	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor);
         }
         else if (this.binaryType == BinaryType.REL) {
-        	RELHeader relHeader = new RELHeader(reader);
+        	//RELHeader relHeader = new RELHeader(reader);
         }
         
         return true;

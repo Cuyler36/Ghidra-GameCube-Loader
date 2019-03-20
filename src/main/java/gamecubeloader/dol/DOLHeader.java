@@ -63,26 +63,36 @@ public class DOLHeader {
 		}
 	}
 	
+	private long alignAddress(long address) {
+		if ((address & 0x1F) == 0) {
+			return address;
+		}
+		
+		return address + (0x20 - (address & 0x1F));
+	}
+	
 	private boolean CheckAddressIntersectsOtherAddresses() {
 		for (int i = 0; i < textSectionMemoryAddresses.length; i++) {
 			long address = textSectionMemoryAddresses[i];
 			long size = textSectionSizes[i];
 			long endAddress = address + size;
 			
+			if (size == 0) continue;
+			
 			// Align end address since all sections in the DOL file must be aligned to 32 bytes.
-			endAddress = endAddress + (0x20 - (endAddress & 0x1F));
+			endAddress = alignAddress(endAddress);
 			
 			// Check against text section violations first.
 			for (int x = 0; x < textSectionMemoryAddresses.length; x++) {
-				if (x == i) continue;
+				if (x == i || textSectionSizes[x] == 0) continue;
 				
 				long otherAddress = textSectionMemoryAddresses[x];
 				long otherSize = textSectionSizes[x];
 				long otherEndAddress = otherAddress + otherSize;
 				
-				otherEndAddress = otherEndAddress - (0x20 - (otherEndAddress & 0x1F));
+				otherEndAddress = alignAddress(otherEndAddress);
 				
-				if ((address >= otherAddress && address < otherEndAddress) || (endAddress > otherAddress && endAddress <= otherEndAddress)) {
+				if ((address >= otherAddress && address < otherEndAddress) || (endAddress > otherAddress && endAddress < otherEndAddress)) {
 					return true;
 				}
 			}
@@ -90,13 +100,17 @@ public class DOLHeader {
 			
 			// Now check against data section & text section violations.
 			for (int x = 0; x < dataSectionMemoryAddresses.length; x++) {
+				if (dataSectionSizes[x] == 0) continue;
+				
 				long otherAddress = dataSectionMemoryAddresses[x];
 				long otherSize = dataSectionSizes[x];
 				long otherEndAddress = otherAddress + otherSize;
 				
-				otherEndAddress = otherEndAddress - (0x20 - (otherEndAddress & 0x1F));
+				otherEndAddress = alignAddress(otherEndAddress);
 				
-				if ((address >= otherAddress && address < otherEndAddress) || (endAddress > otherAddress && endAddress <= otherEndAddress)) {
+				var a = address >= otherAddress && address < otherEndAddress;
+				var b = endAddress > otherAddress && endAddress < otherEndAddress;
+				if ((a) || (b)) {
 					return true;
 				}
 			}
@@ -109,19 +123,21 @@ public class DOLHeader {
 			long endAddress = address + size;
 			
 			// Align end address since all sections in the DOL file must be aligned to 32 bytes.
-			endAddress = endAddress + (0x20 - (endAddress & 0x1F));
+			endAddress = alignAddress(endAddress);
+			
+			if (dataSectionSizes[i] == 0) continue;
 			
 			// Check against text section violations first.
 			for (int x = 0; x < dataSectionMemoryAddresses.length; x++) {
-				if (x == i) continue;
+				if (x == i || dataSectionSizes[x] == 0) continue;
 				
 				long otherAddress = dataSectionMemoryAddresses[x];
 				long otherSize = dataSectionSizes[x];
 				long otherEndAddress = otherAddress + otherSize;
 				
-				otherEndAddress = otherEndAddress - (0x20 - (otherEndAddress & 0x1F));
+				otherEndAddress = alignAddress(otherEndAddress);
 				
-				if ((address >= otherAddress && address < otherEndAddress) || (endAddress > otherAddress && endAddress <= otherEndAddress)) {
+				if ((address >= otherAddress && address < otherEndAddress) || (endAddress > otherAddress && endAddress < otherEndAddress)) {
 					return true;
 				}
 			}
