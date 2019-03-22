@@ -11,6 +11,7 @@ import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.importer.MemoryConflictHandler;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
+import ghidra.util.Msg;
 import ghidra.util.filechooser.ExtensionFileFilter;
 import ghidra.util.task.TaskMonitor;
 
@@ -34,7 +35,7 @@ public final class DOLProgramBuilder {
 	}
 	
 	protected void load(TaskMonitor monitor, ByteProvider provider) {
-		this.baseAddress = 0x80000000;
+		this.baseAddress = 0x80000000L;
 		this.addressSpace = program.getAddressFactory().getDefaultAddressSpace();
 		
 		try {
@@ -43,17 +44,38 @@ public final class DOLProgramBuilder {
 			
 			// Load the DOL file.
 			for (int i = 0; i < 7; i++) {
-				memoryBlockUtil.createInitializedBlock(".text" + i, addressSpace.getAddress(dol.textSectionMemoryAddresses[i]),
+				if (dol.textSectionSizes[i] > 0) {
+					memoryBlockUtil.createInitializedBlock(".text" + i, addressSpace.getAddress(dol.textSectionMemoryAddresses[i]),
 						provider.getInputStream(dol.textSectionOffsets[i]), dol.textSectionSizes[i], "", null, true, true, true, monitor);
+				}
 			}
 			
 			for (int i = 0; i < 11; i++) {
-				memoryBlockUtil.createInitializedBlock(".data" + i, addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
+				if (dol.dataSectionSizes[i] > 0)
+				{
+					memoryBlockUtil.createInitializedBlock(".data" + i, addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
 						provider.getInputStream(dol.dataSectionOffsets[i]), dol.dataSectionSizes[i], "", null, true, true, false, monitor);
+				}
 			}
 			
 			// Add .bss section
-			memoryBlockUtil.createUninitializedBlock(false, ".bss", addressSpace.getAddress(dol.bssMemoryAddress), dol.bssSize, "", null, true, true, false);
+			
+			// In Animal Crossing the .bss section overlaps .sdata. The symbol map has the correct size. 
+			// Knowing that we should check & fix possible overlaps before creating the uninitialized section.
+			var bssAddress = dol.bssMemoryAddress;
+			var bssSize = dol.bssSize;
+			var bssEnd = bssAddress + bssSize;
+			for (var dataSectionAddress : dol.dataSectionMemoryAddresses) {
+				if (bssAddress < dataSectionAddress && bssEnd >= dataSectionAddress) {
+					bssSize = dataSectionAddress - bssAddress;
+				}
+			}
+			
+			var bss = memoryBlockUtil.createUninitializedBlock(false, ".bss", addressSpace.getAddress(bssAddress), bssSize, "", null, true, true, false);
+			if (bss == null) {
+				Msg.info(this, "bss section creation failed!");
+				Msg.info(this, memoryBlockUtil.getMessages());
+			}
 			
 			// Ask if the user wants to load a symbol map file.
 			if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this file?", "Yes", "No", null) == 1) {
