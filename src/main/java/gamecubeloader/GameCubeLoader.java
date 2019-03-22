@@ -18,6 +18,7 @@ package gamecubeloader;
 import java.io.IOException;
 import java.util.*;
 
+import gamecubeloader.common.Yaz0;
 import gamecubeloader.dol.DOLHeader;
 import gamecubeloader.dol.DOLProgramBuilder;
 import gamecubeloader.rel.RELHeader;

@@ -1,4 +1,4 @@
-package gamecubeloader;
+package gamecubeloader.common;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;

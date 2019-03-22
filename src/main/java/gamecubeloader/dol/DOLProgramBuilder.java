@@ -25,8 +25,6 @@ public final class DOLProgramBuilder {
 	
 	public DOLProgramBuilder(DOLHeader dol, ByteProvider provider, Program program,
 			MemoryConflictHandler memConflictHandler, TaskMonitor monitor) {
-		// TODO: Search the directory for any other REL & DOL files.
-		
 		this.dol = dol;
 		this.program = program;
 		this.memoryBlockUtil = new MemoryBlockUtil(program, memConflictHandler);
@@ -40,7 +38,6 @@ public final class DOLProgramBuilder {
 		
 		try {
 			this.program.setImageBase(addressSpace.getAddress(this.baseAddress), true);
-			//this.loadDefaultSegments(monitor);
 			
 			// Load the DOL file.
 			for (int i = 0; i < 7; i++) {
@@ -51,8 +48,7 @@ public final class DOLProgramBuilder {
 			}
 			
 			for (int i = 0; i < 11; i++) {
-				if (dol.dataSectionSizes[i] > 0)
-				{
+				if (dol.dataSectionSizes[i] > 0) {
 					memoryBlockUtil.createInitializedBlock(".data" + i, addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
 						provider.getInputStream(dol.dataSectionOffsets[i]), dol.dataSectionSizes[i], "", null, true, true, false, monitor);
 				}
