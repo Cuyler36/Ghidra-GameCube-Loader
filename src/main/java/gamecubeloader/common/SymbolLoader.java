@@ -217,6 +217,20 @@ public class SymbolLoader {
 			var demangledNameObject = DemanglerUtil.demangle(symbolInfo.name);
 			var demangledName = demangledNameObject == null ? symbolInfo.name : demangledNameObject.getName();
 			
+			// Ghidra's built-in demangler doesn't handle properly demangling constructors and destructors.
+			if (demangledName.contains("__ct")) {
+				if (demangledNameObject.getNamespace() != null ) {
+					demangledName = demangledNameObject.getNamespace().getDemangledName();
+					demangledNameObject.setName(demangledName);
+				}
+			}
+			else if (demangledName.contains("__dt")) {
+				if (demangledNameObject.getNamespace() != null) {
+					demangledName = "~" + demangledNameObject.getNamespace().getDemangledName();
+					demangledNameObject.setName(demangledName);
+				}
+			}
+
 			// Determine namespace
 			Namespace objectNamespace = null;
 			
