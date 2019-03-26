@@ -8,6 +8,14 @@ import ghidra.util.Msg;
 public class DOLHeader {
 	public static final long SIZE = 0xE4;
 	
+	public static final String[] TEXT_NAMES = {
+			".init", ".text", ".text1", ".text2", ".text3", ".text4", ".text5"
+	};
+	
+	public static final String[] DATA_NAMES = {
+		"extab", "extabindex", ".ctors", ".dtors", ".rodata", ".data", ".sdata", ".sdata2", ".bss", ".sbss", ".sbss2"	
+	};
+	
 	public long[] textSectionOffsets;
 	public long[] dataSectionOffsets;
 	public long[] textSectionMemoryAddresses;

@@ -42,35 +42,37 @@ public final class DOLProgramBuilder {
 			// Load the DOL file.
 			for (int i = 0; i < 7; i++) {
 				if (dol.textSectionSizes[i] > 0) {
-					memoryBlockUtil.createInitializedBlock(".text" + i, addressSpace.getAddress(dol.textSectionMemoryAddresses[i]),
+					memoryBlockUtil.createInitializedBlock(DOLHeader.TEXT_NAMES[i], addressSpace.getAddress(dol.textSectionMemoryAddresses[i]),
 						provider.getInputStream(dol.textSectionOffsets[i]), dol.textSectionSizes[i], "", null, true, true, true, monitor);
 				}
 			}
 			
 			for (int i = 0; i < 11; i++) {
 				if (dol.dataSectionSizes[i] > 0) {
-					memoryBlockUtil.createInitializedBlock(".data" + i, addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
+					memoryBlockUtil.createInitializedBlock(DOLHeader.DATA_NAMES[i], addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
 						provider.getInputStream(dol.dataSectionOffsets[i]), dol.dataSectionSizes[i], "", null, true, true, false, monitor);
 				}
 			}
 			
-			// Add .bss section
-			
-			// In Animal Crossing the .bss section overlaps .sdata. The symbol map has the correct size. 
-			// Knowing that we should check & fix possible overlaps before creating the uninitialized section.
-			var bssAddress = dol.bssMemoryAddress;
-			var bssSize = dol.bssSize;
-			var bssEnd = bssAddress + bssSize;
-			for (var dataSectionAddress : dol.dataSectionMemoryAddresses) {
-				if (bssAddress < dataSectionAddress && bssEnd >= dataSectionAddress) {
-					bssSize = dataSectionAddress - bssAddress;
-				}
-			}
-			
-			var bss = memoryBlockUtil.createUninitializedBlock(false, ".bss", addressSpace.getAddress(bssAddress), bssSize, "", null, true, true, false);
+			// Add .bss sections.
+			var bssSectionSize = dol.dataSectionMemoryAddresses[6] - dol.bssMemoryAddress;
+			var bss = memoryBlockUtil.createUninitializedBlock(false, ".bss", addressSpace.getAddress(dol.bssMemoryAddress), bssSectionSize, "", null, true, true, false);
 			if (bss == null) {
 				Msg.info(this, "bss section creation failed!");
 				Msg.info(this, memoryBlockUtil.getMessages());
+			}
+			
+			// Check if we need to add a .sbss section.
+			if (bssSectionSize + dol.dataSectionSizes[6] < dol.bssSize) {			
+				var sbssSectionAddress = dol.dataSectionMemoryAddresses[6] + dol.dataSectionSizes[6];
+				var sbssSectionSize = dol.dataSectionMemoryAddresses[7] - sbssSectionAddress;
+				var sbss = memoryBlockUtil.createUninitializedBlock(false, ".sbss", addressSpace.getAddress(sbssSectionAddress), sbssSectionSize, "", null, true, true, false);
+				if (sbss == null) {
+					Msg.info(this, "sbss section creation failed!");
+					Msg.info(this, memoryBlockUtil.getMessages());
+				}
+				
+				// TODO: .sdata2 & .sbss2 are odd. They're not included in the uninitialized sections size in AC, but .sdata2 does exist. How is this handled?
 			}
 			
 			// Ask if the user wants to load a symbol map file.
