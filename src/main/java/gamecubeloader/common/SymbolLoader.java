@@ -149,8 +149,13 @@ public class SymbolLoader {
 					i += 3; // Skip past the section column data.
 				}
 				else {
-					// We don't want to process these.
-					if (line.contains("entry of ")) continue;
+					var entryInfoStart = line.indexOf("(entry of ");
+					if (entryInfoStart > -1) {
+						var entryInfoEnd = line.indexOf(')');
+						if (entryInfoEnd > -1) {
+							line = line.substring(0, entryInfoStart) + line.substring(entryInfoEnd + 1);
+						}
+					}
 					
 					String[] splitInformation = line.trim().split("\\s+");
 					if (splitInformation.length < 6) continue;
@@ -180,16 +185,19 @@ public class SymbolLoader {
 						
 					SymbolInfo symbolInfo = null;
 					
-					if (virtualAddress >= objectAddress && virtualAddress < program.getAddressFactory().getDefaultAddressSpace().getMaxAddress().getUnsignedOffset())
-					{
+					if (virtualAddress < objectAddress && virtualAddress < program.getAddressFactory().getDefaultAddressSpace().getMaxAddress().getUnsignedOffset()) {
 						// DOL map files sometimes have their virtual address pre-calculated.
-						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation[5], startingAddress,
-								size, virtualAddress, objectAlignment);
+						virtualAddress += effectiveAddress;
 					}
-					else
+
+					if (entryInfoStart > -1)
 					{
+						symbolInfo = new SymbolInfo(splitInformation[3], splitInformation[4], startingAddress,
+							size, virtualAddress, 0);
+					}
+					else {
 						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation[5], startingAddress,
-							size, virtualAddress + effectiveAddress, objectAlignment);
+							size, virtualAddress, objectAlignment);
 					}
 					
 					symbols.add(symbolInfo);
@@ -218,16 +226,18 @@ public class SymbolLoader {
 			var demangledName = demangledNameObject == null ? symbolInfo.name : demangledNameObject.getName();
 			
 			// Ghidra's built-in demangler doesn't handle properly demangling constructors and destructors.
-			if (demangledName.contains("__ct")) {
-				if (demangledNameObject.getNamespace() != null ) {
-					demangledName = demangledNameObject.getNamespace().getDemangledName();
-					demangledNameObject.setName(demangledName);
+			if (demangledNameObject != null) {
+				if (demangledName.contains("__ct")) {
+					if (demangledNameObject.getNamespace() != null ) {
+						demangledName = demangledNameObject.getNamespace().getDemangledName();
+						demangledNameObject.setName(demangledName);
+					}
 				}
-			}
-			else if (demangledName.contains("__dt")) {
-				if (demangledNameObject.getNamespace() != null) {
-					demangledName = "~" + demangledNameObject.getNamespace().getDemangledName();
-					demangledNameObject.setName(demangledName);
+				else if (demangledName.contains("__dt")) {
+					if (demangledNameObject.getNamespace() != null) {
+						demangledName = "~" + demangledNameObject.getNamespace().getDemangledName();
+						demangledNameObject.setName(demangledName);
+					}
 				}
 			}
 
