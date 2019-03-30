@@ -56,6 +56,13 @@ public final class DOLProgramBuilder {
 			
 			// Add .bss sections.
 			var bssSectionSize = dol.dataSectionMemoryAddresses[6] - dol.bssMemoryAddress;
+			
+			var sdataStartIdx = 6;
+			if (dol.dataSectionMemoryAddresses[6] + dol.dataSectionSizes[6] == dol.bssMemoryAddress) {
+				bssSectionSize = dol.dataSectionMemoryAddresses[7] - dol.bssMemoryAddress;
+				sdataStartIdx = 7;
+			}
+			
 			var bss = memoryBlockUtil.createUninitializedBlock(false, ".bss", addressSpace.getAddress(dol.bssMemoryAddress), bssSectionSize, "", null, true, true, false);
 			if (bss == null) {
 				Msg.info(this, "bss section creation failed!");
@@ -63,9 +70,13 @@ public final class DOLProgramBuilder {
 			}
 			
 			// Check if we need to add a .sbss section.
-			if (bssSectionSize + dol.dataSectionSizes[6] < dol.bssSize) {			
-				var sbssSectionAddress = dol.dataSectionMemoryAddresses[6] + dol.dataSectionSizes[6];
-				var sbssSectionSize = dol.dataSectionMemoryAddresses[7] - sbssSectionAddress;
+			if (bssSectionSize + dol.dataSectionSizes[sdataStartIdx] < dol.bssSize) {			
+				var sbssSectionAddress = dol.dataSectionMemoryAddresses[sdataStartIdx] + dol.dataSectionSizes[sdataStartIdx];
+				var sbssSectionSize = dol.dataSectionMemoryAddresses[sdataStartIdx + 1] - sbssSectionAddress;
+				if (dol.dataSectionMemoryAddresses[sdataStartIdx + 1] == 0) {
+					sbssSectionSize = dol.bssSize - (bssSectionSize + dol.dataSectionSizes[6] + dol.dataSectionSizes[7]); // Fallback?
+				}
+				
 				var sbss = memoryBlockUtil.createUninitializedBlock(false, ".sbss", addressSpace.getAddress(sbssSectionAddress), sbssSectionSize, "", null, true, true, false);
 				if (sbss == null) {
 					Msg.info(this, "sbss section creation failed!");
