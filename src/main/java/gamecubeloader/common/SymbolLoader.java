@@ -4,7 +4,6 @@ import java.io.BufferedReader;
 import java.io.FileReader;
 import java.util.*;
 
-import ghidra.app.util.demangler.Demangler;
 import ghidra.app.util.demangler.DemanglerOptions;
 import ghidra.app.util.demangler.DemanglerUtil;
 import ghidra.program.model.address.AddressFactory;

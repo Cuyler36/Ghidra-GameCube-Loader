@@ -8,6 +8,16 @@ import ghidra.util.Msg;
 public class RELHeader {
 	private static final int SECTION_INFO_SIZE = 8;
 	
+	public class SectionInfo {
+		public long address;
+		public long size;
+		
+		public SectionInfo(long address, long size) {
+			this.address = address;
+			this.size = size;
+		}
+	}
+	
 	public long moduleId;
 	public long previousModuleAddress;
 	public long nextModuleAddress;
@@ -34,6 +44,8 @@ public class RELHeader {
 	public long sectionAlignment;
 	public long bssSectionAlignment;
 	public long fixSize;
+	
+	public SectionInfo[] sections;
 	
 	public RELHeader(BinaryReader reader) {
 		this.readHeader(reader);
@@ -69,6 +81,13 @@ public class RELHeader {
 			
 			if (this.moduleVersion > 2) {
 				this.fixSize = reader.readNextUnsignedInt();
+			}
+			
+			// Read sections info.
+			reader.setPointerIndex(this.sectionTableOffset);
+			this.sections = new SectionInfo[(int) this.sectionCount];
+			for (var i = 0; i < this.sectionCount; i++) {
+				this.sections[i] = new SectionInfo(reader.readNextUnsignedInt(), reader.readNextUnsignedInt());
 			}
 		}
 		catch (IOException e) {
