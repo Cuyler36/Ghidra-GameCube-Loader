@@ -396,7 +396,7 @@ public class RELProgramBuilder  {
 					break;
 					
 				default:
-					Msg.warn(this, String.format("Relocations: Unsupported relocation %X2", relocation.type));
+					Msg.warn(this, String.format("Relocations: Unsupported relocation %X", relocation.type));
 					break;
 				}
 				
