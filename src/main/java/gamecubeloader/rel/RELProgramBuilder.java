@@ -246,7 +246,8 @@ public class RELProgramBuilder  {
 				
 				if (selectedFile != null) {
 					var reader = new FileReader(selectedFile);
-					var loader = new SymbolLoader(this.program, monitor, reader, relBaseAddress, 0, 0);
+					var loader = new SymbolLoader(this.program, monitor, reader, relBaseAddress, 0,
+							relInfo.header.bssSectionId != 0 ? relInfo.header.sections[relInfo.header.bssSectionId].address : 0);
 					loader.ApplySymbols();
 				}
 			}
