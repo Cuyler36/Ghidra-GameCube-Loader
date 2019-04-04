@@ -26,12 +26,17 @@ public class DOLHeader {
 	public long bssSize;
 	public long entryPoint;
 	
+	// Not part of the DOL header.
+	public long memoryEndAddress;
+	
 	public DOLHeader(BinaryReader reader) {
 		this.readHeader(reader);
 	}
 	
 	private void readHeader(BinaryReader reader) {
 		try {
+			reader.setPointerIndex(0);
+			
 			textSectionOffsets = new long[7];
 			for (int i = 0; i < 7; i++) {
 				textSectionOffsets[i] = reader.readNextUnsignedInt();
@@ -157,6 +162,10 @@ public class DOLHeader {
 	public boolean CheckHeaderIsValid() {
 		// Check that no section intersect any other sections.
 		if (this.CheckAddressIntersectsOtherAddresses()) {
+			return false;
+		}
+		
+		if (this.entryPoint < 0x80000000L || this.entryPoint > 0x817FFFFFL) {
 			return false;
 		}
 		

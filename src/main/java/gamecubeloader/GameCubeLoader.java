@@ -22,6 +22,7 @@ import gamecubeloader.common.Yaz0;
 import gamecubeloader.dol.DOLHeader;
 import gamecubeloader.dol.DOLProgramBuilder;
 import gamecubeloader.rel.RELHeader;
+import gamecubeloader.rel.RELProgramBuilder;
 import ghidra.app.util.Option;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
@@ -42,6 +43,7 @@ import ghidra.program.model.lang.CompilerSpec;
 import ghidra.program.model.lang.Language;
 import ghidra.program.model.lang.LanguageCompilerSpecPair;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
@@ -67,13 +69,16 @@ public class GameCubeLoader extends BinaryLoader {
 	public Collection<LoadSpec> findSupportedLoadSpecs(ByteProvider provider) throws IOException {
 		List<LoadSpec> loadSpecs = new ArrayList<>();
 
-		// TODO: Examine the bytes in 'provider' to determine if this loader can load it.  If it 
-		// can load it, return the appropriate load specifications.
-
-		// TODO: Do we want to decompress the file twice? For now we'll just check if it's a yaz0 file.
 		Yaz0 yaz0 = new Yaz0();
 		if (yaz0.IsValid(provider)) {
-			binaryType = BinaryType.REL; // DOL files cannot be compressed.
+			provider = yaz0.Decompress(provider);
+			var reader = new BinaryReader(provider, false);
+			var header = new RELHeader(reader);
+			
+			if (header.IsValid(reader)) {
+				binaryType = BinaryType.REL;
+				relHeader = header;
+			}
 		}
 		else {
 			// Attempt to determine the binary type based off of the info in it.
@@ -89,6 +94,10 @@ public class GameCubeLoader extends BinaryLoader {
 			else {
 				// TODO: Check for REL now.
 				RELHeader tempRelHeader = new RELHeader(reader);
+				if (tempRelHeader.IsValid(reader)) {
+					binaryType = BinaryType.REL;
+					relHeader = tempRelHeader;
+				}
 			}
 		}
 		
@@ -136,13 +145,22 @@ public class GameCubeLoader extends BinaryLoader {
     protected boolean loadProgramInto(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
             MessageLog messageLog, Program program, TaskMonitor monitor, MemoryConflictHandler memoryConflictHandler) 
             throws IOException {
-        
-        
         if (this.binaryType == BinaryType.DOL) {
         	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor);
         }
         else if (this.binaryType == BinaryType.REL) {
-        	//RELHeader relHeader = new RELHeader(reader);
+        	try {
+				new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor);
+			} catch (AddressOverflowException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (AddressOutOfBoundsException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			} catch (MemoryAccessException e) {
+				// TODO Auto-generated catch block
+				e.printStackTrace();
+			}
         }
         
         return true;

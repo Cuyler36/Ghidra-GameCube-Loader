@@ -53,6 +53,8 @@ public class RELHeader {
 	
 	private void readHeader(BinaryReader reader) {
 		try {
+			reader.setPointerIndex(0);
+			
 			this.moduleId = reader.readNextUnsignedInt();
 			this.previousModuleAddress = reader.readNextUnsignedInt();
 			this.nextModuleAddress = reader.readNextUnsignedInt();
@@ -83,11 +85,14 @@ public class RELHeader {
 				this.fixSize = reader.readNextUnsignedInt();
 			}
 			
-			// Read sections info.
-			reader.setPointerIndex(this.sectionTableOffset);
-			this.sections = new SectionInfo[(int) this.sectionCount];
-			for (var i = 0; i < this.sectionCount; i++) {
-				this.sections[i] = new SectionInfo(reader.readNextUnsignedInt(), reader.readNextUnsignedInt());
+			// Only read the sections if the header is valid.
+			if (IsValid(reader)) {
+				// Read sections info.
+				reader.setPointerIndex(this.sectionTableOffset);
+				this.sections = new SectionInfo[(int) this.sectionCount];
+				for (var i = 0; i < this.sectionCount; i++) {
+					this.sections[i] = new SectionInfo(reader.readNextUnsignedInt(), reader.readNextUnsignedInt());
+				}
 			}
 		}
 		catch (IOException e) {
@@ -97,7 +102,25 @@ public class RELHeader {
 	
 	public boolean IsValid(BinaryReader reader) {
 		try {
+			long fileSize = reader.length();
+			
 			// Check section info is valid first.
+			if (this.sectionTableOffset > fileSize) {
+				Msg.error(this, "Unable to load REL file! Reason: Section Info Table address is past file bounds!");
+				return false;
+			}
+			
+			// Check that the relocation data offset & import info offset are valid offsets in the file.
+			if (this.relocationTableOffset >= fileSize) {
+				Msg.error(this, "Unable to load REL file! Reason: Relocation Data offset in header is past the file bounds!");
+				return false;
+			}
+			
+			if (this.importTableOffset + this.importTableSize > fileSize) {
+				Msg.error(this, "Unable to load REL file! Reason: Import Table offset + Import Table size in header is past the file bounds!");
+				return false;
+			}
+			
 			long sectionTableSize = this.sectionCount * RELHeader.SECTION_INFO_SIZE;
 			
 			// Get the first section address by file address.
@@ -122,19 +145,6 @@ public class RELHeader {
 			}
 			
 			// TODO: Ensure that no section intersects with another. Should this include the relocation data section & import info section?
-			
-			// Check that the relocation data offset & import info offset are valid offsets in the file.
-			long fileSize = reader.length();
-			
-			if (this.relocationTableOffset >= fileSize) {
-				Msg.error(this, "Unable to load REL file! Reason: Relocation Data offset in header is past the file bounds!");
-				return false;
-			}
-			
-			if (this.importTableOffset + this.importTableSize > fileSize) {
-				Msg.error(this, "Unable to load REL file! Reason: Import Table offset + Import Table size in header is past the file bounds!");
-				return false;
-			}
 		}
 		catch (IOException e) {
 			return false;
