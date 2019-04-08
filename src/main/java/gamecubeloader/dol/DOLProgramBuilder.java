@@ -22,12 +22,14 @@ public final class DOLProgramBuilder {
 	private AddressSpace addressSpace;
 	private Program program;
 	private MemoryBlockUtil memoryBlockUtil;
+	private boolean autoloadMaps;
 	
 	public DOLProgramBuilder(DOLHeader dol, ByteProvider provider, Program program,
-			MemoryConflictHandler memConflictHandler, TaskMonitor monitor) {
+			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, boolean autoloadMaps) {
 		this.dol = dol;
 		this.program = program;
 		this.memoryBlockUtil = new MemoryBlockUtil(program, memConflictHandler);
+		this.autoloadMaps = autoloadMaps;
 		
 		this.load(monitor, provider);
 	}
@@ -118,17 +120,33 @@ public final class DOLProgramBuilder {
 			}
 			
 			// Ask if the user wants to load a symbol map file.
-			if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this DOL executable?", "Yes", "No", null) == 1) {
-				var fileChooser = new GhidraFileChooser(null);
-				fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
-				fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));
-				var selectedFile = fileChooser.getSelectedFile(true);
-				
-				if (selectedFile != null) {
-					FileReader reader = new FileReader(selectedFile);
-					SymbolLoader loader = new SymbolLoader(this.program, monitor, reader, dol.textSectionMemoryAddresses[0], 32, dol.bssMemoryAddress);
-					loader.ApplySymbols();
+			var mapLoaded = false;
+			if (this.autoloadMaps) {
+				var name = provider.getName();
+				if (name.contains(".")) {
+					name = name.substring(0, name.lastIndexOf("."));
 				}
+				
+				mapLoaded = SymbolLoader.TryLoadAssociatedMapFile(name, provider.getFile().getParentFile(), this.program, monitor, dol.textSectionMemoryAddresses[0],
+						32, dol.bssMemoryAddress);
+			}
+
+			
+			if (mapLoaded == false) {
+				if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this DOL executable?", "Yes", "No", null) == 1) {
+					var fileChooser = new GhidraFileChooser(null);
+					fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
+					fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));
+					var selectedFile = fileChooser.getSelectedFile(true);
+					
+					if (selectedFile != null) {
+						FileReader reader = new FileReader(selectedFile);
+						SymbolLoader loader = new SymbolLoader(this.program, monitor, reader, dol.textSectionMemoryAddresses[0], 32, dol.bssMemoryAddress);
+						loader.ApplySymbols();
+					}
+				}
+			}
+			else {
 			}
 		}
 		catch (Exception e) {

@@ -1,6 +1,8 @@
 package gamecubeloader.common;
 
 import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 import java.util.*;
 
@@ -298,5 +300,33 @@ public class SymbolLoader {
 				Msg.error(this, "Symbol Loader: An error occurred when attempting to load symbol: " + symbolInfo.name);
 			}
 		}
+	}
+	
+	public static boolean TryLoadAssociatedMapFile(String binaryName, File directory, Program program, TaskMonitor monitor, long objectAddress, int alignment,
+			long bssAddress) {
+		if (directory == null) return false;
+		
+		var files = directory.listFiles();
+		
+		for (var i = 0; i < files.length; i++) {
+			var fileName = files[i].getName();
+			
+			if (fileName.endsWith(binaryName + ".map")) {
+				FileReader fileReader;
+				
+				try {
+					fileReader = new FileReader(files[i]);
+				} catch (FileNotFoundException e) {
+					e.printStackTrace();
+					return false;
+				}
+			
+				var loader = new SymbolLoader(program, monitor, fileReader, objectAddress, alignment, bssAddress);
+				loader.ApplySymbols();
+				return true;
+			}
+		}
+		
+		return false;
 	}
 }

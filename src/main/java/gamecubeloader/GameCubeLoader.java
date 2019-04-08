@@ -31,14 +31,11 @@ import ghidra.app.util.importer.MessageLog;
 import ghidra.app.util.opinion.BinaryLoader;
 import ghidra.app.util.opinion.LoadSpec;
 import ghidra.app.util.opinion.Loader;
-import ghidra.app.util.opinion.LoaderTier;
 import ghidra.framework.model.DomainFolder;
 import ghidra.framework.model.DomainObject;
-import ghidra.framework.store.LockException;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressOutOfBoundsException;
 import ghidra.program.model.address.AddressOverflowException;
-import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.lang.CompilerSpec;
 import ghidra.program.model.lang.Language;
 import ghidra.program.model.lang.LanguageCompilerSpecPair;
@@ -55,6 +52,8 @@ public class GameCubeLoader extends BinaryLoader {
 	private static enum BinaryType {
 		DOL, REL
 	}
+	
+	private static final String autoloadCmd = Loader.COMMAND_LINE_ARG_PREFIX + "-autoloadMaps";
 	
 	private BinaryType binaryType;
 	private DOLHeader dolHeader;
@@ -145,20 +144,24 @@ public class GameCubeLoader extends BinaryLoader {
     protected boolean loadProgramInto(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
             MessageLog messageLog, Program program, TaskMonitor monitor, MemoryConflictHandler memoryConflictHandler) 
             throws IOException {
+    	
+    	boolean autoLoadMaps = false;
+    	// TODO: There's definitely a better way to do this.
+    	// Seems like OptionListerner interface is probably the best way.
+    	for (var option : options) {
+    		if (option.getArg() == GameCubeLoader.autoloadCmd) {
+    			autoLoadMaps = (boolean) option.getValue();
+    			break;
+    		}
+    	}
+    	
         if (this.binaryType == BinaryType.DOL) {
-        	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor);
+        	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor, autoLoadMaps);
         }
         else if (this.binaryType == BinaryType.REL) {
         	try {
-				new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor);
-			} catch (AddressOverflowException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (AddressOutOfBoundsException e) {
-				// TODO Auto-generated catch block
-				e.printStackTrace();
-			} catch (MemoryAccessException e) {
-				// TODO Auto-generated catch block
+				new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor, autoLoadMaps);
+			} catch (AddressOverflowException | AddressOutOfBoundsException | MemoryAccessException e ) {
 				e.printStackTrace();
 			}
         }
@@ -171,8 +174,9 @@ public class GameCubeLoader extends BinaryLoader {
 			DomainObject domainObject, boolean isLoadIntoProgram) {
 		List<Option> list =
 			super.getDefaultOptions(provider, loadSpec, domainObject, isLoadIntoProgram);
-
-		list.add(new Option("Load Dependencies", true, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-loadDependencies"));
+		
+		list.add(new Option("Automatically load symbol map files with corresponding names", true, Boolean.class,
+				GameCubeLoader.autoloadCmd));
 
 		return list;
 	}

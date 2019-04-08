@@ -1,6 +1,5 @@
 package gamecubeloader.rel;
 
-import java.io.FileInputStream;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
@@ -16,7 +15,6 @@ import gamecubeloader.dol.DOLProgramBuilder;
 import ghidra.app.util.MemoryBlockUtil;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
-import ghidra.app.util.bin.InputStreamByteProvider;
 import ghidra.app.util.bin.RandomAccessByteProvider;
 import ghidra.app.util.importer.MemoryConflictHandler;
 import ghidra.program.model.address.AddressOutOfBoundsException;
@@ -40,6 +38,7 @@ public class RELProgramBuilder  {
 	private MemoryConflictHandler memConflictHandler;
 	private MemoryBlockUtil memoryBlockUtil;
 	private TaskMonitor monitor;
+	private boolean autoloadMaps = false;
 	
 	private static final int IMPORT_ENTRY_SIZE = 8;
 	private static final int RELOCATION_SIZE = 8;
@@ -102,13 +101,14 @@ public class RELProgramBuilder  {
 	}
 	
 	public RELProgramBuilder(RELHeader rel, ByteProvider provider, Program program,
-			MemoryConflictHandler memConflictHandler, TaskMonitor monitor)
+			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, boolean autoloadMaps)
 					throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException {
 		this.rel = rel;
 		this.program = program;
 		this.memConflictHandler = memConflictHandler;
 		this.memoryBlockUtil = new MemoryBlockUtil(program, memConflictHandler);
 		this.monitor = monitor;
+		this.autoloadMaps = autoloadMaps;
 		
 		this.load(provider);
 	}
@@ -176,7 +176,8 @@ public class RELProgramBuilder  {
 		
 		// If a DOL file exists, load it first.
 		if (this.dol != null) {
-			new DOLProgramBuilder(this.dol, this.dolReader.getByteProvider(), this.program, this.memConflictHandler, this.monitor);
+			new DOLProgramBuilder(this.dol, this.dolReader.getByteProvider(), this.program, this.memConflictHandler, this.monitor,
+					this.autoloadMaps);
 			currentOutputAddress = align(this.dol.memoryEndAddress, 0x20);
 		}
 		
@@ -236,19 +237,33 @@ public class RELProgramBuilder  {
 			// Align the output address for the next module.
 			currentOutputAddress = align(currentOutputAddress, 0x20);
 			
-			// Ask if the user wants to load a symbol map file.
-			if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", String.format("Would you like to load a symbol map for the relocatable module %s?", relInfo.name),
-					"Yes", "No", null) == 1) {
-				var fileChooser = new GhidraFileChooser(null);
-				fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
-				fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));
-				var selectedFile = fileChooser.getSelectedFile(true);
+			var mapLoaded = false;
+			if (this.autoloadMaps) {
+				var name = relInfo.name;
+				if (name.contains(".")) {
+					name = name.substring(0, name.lastIndexOf("."));
+				}
 				
-				if (selectedFile != null) {
-					var reader = new FileReader(selectedFile);
-					var loader = new SymbolLoader(this.program, monitor, reader, relBaseAddress, 0,
-							relInfo.header.bssSectionId != 0 ? relInfo.header.sections[relInfo.header.bssSectionId].address : 0);
-					loader.ApplySymbols();
+				mapLoaded = SymbolLoader.TryLoadAssociatedMapFile(name, directory, this.program, this.monitor, relBaseAddress, 0,
+						relInfo.header.bssSectionId != 0 ? relInfo.header.sections[relInfo.header.bssSectionId].address : 0);
+			}
+			
+			
+			if (mapLoaded == false) {
+				// Ask if the user wants to load a symbol map file.
+				if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", String.format("Would you like to load a symbol map for the relocatable module %s?", relInfo.name),
+						"Yes", "No", null) == 1) {
+					var fileChooser = new GhidraFileChooser(null);
+					fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
+					fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));
+					var selectedFile = fileChooser.getSelectedFile(true);
+					
+					if (selectedFile != null) {
+						var reader = new FileReader(selectedFile);
+						var loader = new SymbolLoader(this.program, monitor, reader, relBaseAddress, 0,
+								relInfo.header.bssSectionId != 0 ? relInfo.header.sections[relInfo.header.bssSectionId].address : 0);
+						loader.ApplySymbols();
+					}
 				}
 			}
 		}
