@@ -45,7 +45,7 @@ public final class DOLProgramBuilder {
 			// Load the DOL file.
 			for (int i = 0; i < 7; i++) {
 				if (dol.textSectionSizes[i] > 0) {
-					memoryBlockUtil.createInitializedBlock(DOLHeader.TEXT_NAMES[i], addressSpace.getAddress(dol.textSectionMemoryAddresses[i]),
+					memoryBlockUtil.createInitializedBlock(String.format("MAIN_.text%d", i), addressSpace.getAddress(dol.textSectionMemoryAddresses[i]),
 						provider.getInputStream(dol.textSectionOffsets[i]), dol.textSectionSizes[i], "", null, true, true, true, monitor);
 					
 					if (dol.memoryEndAddress < dol.textSectionMemoryAddresses[i] + dol.textSectionSizes[i]) {
@@ -56,7 +56,7 @@ public final class DOLProgramBuilder {
 			
 			for (int i = 0; i < 11; i++) {
 				if (dol.dataSectionSizes[i] > 0) {
-					memoryBlockUtil.createInitializedBlock(DOLHeader.DATA_NAMES[i], addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
+					memoryBlockUtil.createInitializedBlock(String.format("MAIN_.data%d", i), addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
 						provider.getInputStream(dol.dataSectionOffsets[i]), dol.dataSectionSizes[i], "", null, true, true, false, monitor);
 					
 					if (dol.memoryEndAddress < dol.dataSectionMemoryAddresses[i] + dol.dataSectionSizes[i]) {
@@ -65,59 +65,8 @@ public final class DOLProgramBuilder {
 				}
 			}
 			
-			// Add .bss sections.
-			var bssSectionSize = dol.dataSectionMemoryAddresses[6] - dol.bssMemoryAddress;
-			
-			var sdataStartIdx = 6;
-			if (dol.dataSectionMemoryAddresses[6] + dol.dataSectionSizes[6] == dol.bssMemoryAddress) {
-				bssSectionSize = dol.dataSectionMemoryAddresses[7] - dol.bssMemoryAddress;
-				sdataStartIdx = 7;
-			}
-			
-			var bss = memoryBlockUtil.createUninitializedBlock(false, ".bss", addressSpace.getAddress(dol.bssMemoryAddress), bssSectionSize, "", null, true, true, false);
-			if (bss == null) {
-				Msg.info(this, "bss section creation failed!");
-				Msg.info(this, memoryBlockUtil.getMessages());
-			}
-			else if (dol.memoryEndAddress < dol.bssMemoryAddress + bssSectionSize) {
-				dol.memoryEndAddress = dol.bssMemoryAddress + bssSectionSize;
-			}
-			
-			// Check if we need to add a .sbss section.
-			if (bssSectionSize + dol.dataSectionSizes[sdataStartIdx] < dol.bssSize) {			
-				var sbssSectionAddress = dol.dataSectionMemoryAddresses[sdataStartIdx] + dol.dataSectionSizes[sdataStartIdx];
-				var sbssSectionSize = dol.dataSectionMemoryAddresses[sdataStartIdx + 1] - sbssSectionAddress;
-				if (dol.dataSectionMemoryAddresses[sdataStartIdx + 1] == 0) {
-					sbssSectionSize = dol.bssSize - (bssSectionSize + dol.dataSectionSizes[6] + dol.dataSectionSizes[7]); // Fallback?
-				}
-				
-				var sbss = memoryBlockUtil.createUninitializedBlock(false, ".sbss", addressSpace.getAddress(sbssSectionAddress), sbssSectionSize, "", null, true, true, false);
-				if (sbss == null) {
-					Msg.info(this, "sbss section creation failed!");
-					Msg.info(this, memoryBlockUtil.getMessages());
-				}
-				else if (dol.memoryEndAddress < sbssSectionAddress + sbssSectionSize) {
-					dol.memoryEndAddress = sbssSectionAddress + sbssSectionSize;
-				}
-				
-				// TODO: .sdata2 & .sbss2 are odd. They're not included in the uninitialized sections size in AC, but .sdata2 does exist. How is this handled?
-				var sdata2StartIdx = sdataStartIdx + 1;
-				if (bssSectionSize + dol.dataSectionSizes[sdataStartIdx] + sbssSectionSize + dol.dataSectionSizes[sdata2StartIdx] < dol.bssSize) {
-					var sbss2Address = dol.dataSectionMemoryAddresses[sdata2StartIdx] + dol.dataSectionSizes[sdata2StartIdx];
-					var sbss2SectionSize = dol.bssSize - (bssSectionSize + dol.dataSectionSizes[sdataStartIdx] + sbssSectionSize + dol.dataSectionSizes[sdata2StartIdx]);
-					
-					if (sbss2SectionSize > 0) {
-						var sbss2 = memoryBlockUtil.createUninitializedBlock(false, ".sbss2", addressSpace.getAddress(sbss2Address), sbss2SectionSize, "", null, true, true, false);
-						if (sbss2 == null) {
-							Msg.info(this, "sbss2 section creation failed!");
-							Msg.info(this,  memoryBlockUtil.getMessages());
-						}
-						else if (dol.memoryEndAddress < sbss2Address + sbss2SectionSize) {
-							dol.memoryEndAddress = sbss2Address + sbss2SectionSize;
-						}
-					}
-				}
-			}
+			// Add uninitialized sections.
+			this.CreateUninitializedSections();
 			
 			// Ask if the user wants to load a symbol map file.
 			var mapLoaded = false;
@@ -154,5 +103,54 @@ public final class DOLProgramBuilder {
 		}
 	}
 	
-
+	private void CreateUninitializedSections() {
+		var uninitializedSectionsSize = dol.bssSize;
+		var uninitializedSectionAddress = dol.bssMemoryAddress;
+		var uninitializedSectionIdx = 0;
+		
+		while (uninitializedSectionsSize > 0 && uninitializedSectionIdx < 3) {
+			// Check for intersecting sections at the current address + size.
+			var uninitializedSectionEndAddress = uninitializedSectionAddress + uninitializedSectionsSize;
+			var wroteSection = false;
+			
+			for (var i = 0; i < this.dol.dataSectionMemoryAddresses.length; i++) {
+				var sectionAddress = this.dol.dataSectionMemoryAddresses[i];
+				var sectionSize = this.dol.dataSectionSizes[i];
+				if (sectionAddress >= uninitializedSectionAddress && sectionAddress < uninitializedSectionEndAddress) {
+					// Truncate the size and create a section.
+					var thisSectionSize = sectionAddress - uninitializedSectionAddress;
+					if (thisSectionSize > 0) {
+						var createdSection = memoryBlockUtil.createUninitializedBlock(false, String.format("MAIN_%s", DOLHeader.DATA_NAMES[8 + uninitializedSectionIdx]),
+								addressSpace.getAddress(uninitializedSectionAddress), thisSectionSize, "", null, true, true, false);
+						
+						if (createdSection == null) {
+							Msg.warn(this, "Failed to create uninitialized section: " + DOLHeader.DATA_NAMES[8 + uninitializedSectionIdx]);
+						}
+						
+						// We also have to subtract any intersecting sections from the size.
+						// NOTE: This may not be correct for sections which aren't .sdata & .sdata2 which intersect it.
+						uninitializedSectionsSize -= sectionSize;
+						
+						uninitializedSectionsSize -= thisSectionSize;
+						uninitializedSectionAddress = sectionAddress + sectionSize;
+						uninitializedSectionIdx++;
+						wroteSection = true;
+						break;
+					}
+				}
+			}
+			
+			// If we didn't create any uninitialized sections, we must be clear to write the rest of the size without intersections.
+			if (wroteSection == false) {
+				var createdSection = memoryBlockUtil.createUninitializedBlock(false, String.format("MAIN_%s", DOLHeader.DATA_NAMES[8 + uninitializedSectionIdx]),
+						addressSpace.getAddress(uninitializedSectionAddress), uninitializedSectionsSize, "", null, true, true, false);
+				
+				if (createdSection == null) {
+					Msg.warn(this, "Failed to create uninitialized section: " + DOLHeader.DATA_NAMES[8 + uninitializedSectionIdx]);
+				}
+				
+				break;
+			}
+		}
+	}
 }
