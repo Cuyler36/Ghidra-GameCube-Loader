@@ -79,7 +79,6 @@ public final class DOLProgramBuilder {
 				mapLoaded = SymbolLoader.TryLoadAssociatedMapFile(name, provider.getFile().getParentFile(), this.program, monitor, dol.textSectionMemoryAddresses[0],
 						32, dol.bssMemoryAddress);
 			}
-
 			
 			if (mapLoaded == false) {
 				if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this DOL executable?", "Yes", "No", null) == 1) {
@@ -94,8 +93,6 @@ public final class DOLProgramBuilder {
 						loader.ApplySymbols();
 					}
 				}
-			}
-			else {
 			}
 		}
 		catch (Exception e) {

@@ -8,7 +8,9 @@ import java.util.*;
 
 import ghidra.app.util.demangler.DemanglerOptions;
 import ghidra.app.util.demangler.DemanglerUtil;
+import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.AddressFactory;
+import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.symbol.Namespace;
@@ -97,8 +99,8 @@ public class SymbolLoader {
 		}
 		
 		// TODO: This shouldn't be thrown for symbol maps that are previous formats.
-		Msg.error(this, "Symbol Loader: The memory map information couldn't be located. This symbol map cannot be loaded.");
-		return null;
+		Msg.warn(this, "Symbol Loader: The memory map information couldn't be located. This symbol map may not be loaded correctly.");
+		return memMapInfo;
 	}
 	
 	private void ParseSymbols() {
@@ -146,10 +148,12 @@ public class SymbolLoader {
 						}
 					}
 					else {
-						Msg.info(this, "Symbol Loader: No memory layout information was found for section: " + sectionName);
+						Msg.warn(this, "Symbol Loader: No memory layout information was found for section: " + sectionName);
 					}
 					
-					i += 3; // Skip past the section column data.
+					if (i + 1 < lines.length && lines[i + 1].trim().startsWith("Starting")) {
+						i += 3; // Skip past the section column data.
+					}
 				}
 				else {
 					var entryInfoStart = line.indexOf("(entry of ");
@@ -189,7 +193,7 @@ public class SymbolLoader {
 					SymbolInfo symbolInfo = null;
 					
 					if (virtualAddress < objectAddress && virtualAddress < program.getAddressFactory().getDefaultAddressSpace().getMaxAddress().getUnsignedOffset()) {
-						// DOL map files sometimes have their virtual address pre-calculated.
+						// Dolphin Emulator & DOL map files have their virtual address pre-calculated.
 						virtualAddress += effectiveAddress;
 					}
 
@@ -282,8 +286,21 @@ public class SymbolLoader {
 			}
 			
 			try {
-				symbolTable.createLabel(addressSpace.getAddress(symbolInfo.virtualAddress), demangledName,
-					objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
+				var symbolAddress = addressSpace.getAddress(symbolInfo.virtualAddress);
+				symbolTable.createLabel(symbolAddress, demangledName, objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
+				
+				// If it's a function, create it.
+				if (symbolInfo.size > 3 && this.program.getMemory().getBlock(symbolAddress).isExecute()) {
+					var addressSet = new AddressSet(symbolAddress, addressSpace.getAddress(symbolInfo.virtualAddress + symbolInfo.size - 1));
+					try {
+						this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
+								symbolAddress, addressSet, SourceType.ANALYSIS);
+					}
+					catch (OverlappingFunctionException | IllegalArgumentException e) {
+						e.printStackTrace();
+					}
+				}
+				
 				
 				// Try applying the function arguments & return type using the demangled info.
 				if (demangledNameObject != null) {
