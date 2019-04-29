@@ -117,11 +117,11 @@ public final class DOLProgramBuilder {
 					// Truncate the size and create a section.
 					var thisSectionSize = sectionAddress - uninitializedSectionAddress;
 					if (thisSectionSize > 0) {
-						var createdSection = memoryBlockUtil.createUninitializedBlock(false, String.format("MAIN_%s", DOLHeader.DATA_NAMES[8 + uninitializedSectionIdx]),
+						var createdSection = memoryBlockUtil.createUninitializedBlock(false, String.format("MAIN_%s", "uninitialized" + uninitializedSectionIdx),
 								addressSpace.getAddress(uninitializedSectionAddress), thisSectionSize, "", null, true, true, false);
 						
 						if (createdSection == null) {
-							Msg.warn(this, "Failed to create uninitialized section: " + DOLHeader.DATA_NAMES[8 + uninitializedSectionIdx]);
+							Msg.warn(this, "Failed to create uninitialized section: " + "uninitialized" + uninitializedSectionIdx);
 						}
 						
 						// We also have to subtract any intersecting sections from the size.
@@ -139,7 +139,7 @@ public final class DOLProgramBuilder {
 			
 			// If we didn't create any uninitialized sections, we must be clear to write the rest of the size without intersections.
 			if (wroteSection == false) {
-				var createdSection = memoryBlockUtil.createUninitializedBlock(false, String.format("MAIN_%s", DOLHeader.DATA_NAMES[8 + uninitializedSectionIdx]),
+				var createdSection = memoryBlockUtil.createUninitializedBlock(false, String.format("MAIN_%s", "uninitialized0"),
 						addressSpace.getAddress(uninitializedSectionAddress), uninitializedSectionsSize, "", null, true, true, false);
 				
 				if (createdSection == null) {

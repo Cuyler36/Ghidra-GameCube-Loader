@@ -8,11 +8,14 @@ import java.util.*;
 
 import ghidra.app.util.demangler.DemanglerOptions;
 import ghidra.app.util.demangler.DemanglerUtil;
+import ghidra.framework.store.LockException;
 import ghidra.program.database.function.OverlappingFunctionException;
+import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressFactory;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.listing.ProgramFragment;
 import ghidra.program.model.symbol.Namespace;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.symbol.SymbolTable;
@@ -72,11 +75,14 @@ public class SymbolLoader {
 				else if (splitInformation.length < 4) continue;
 				
 				try {
+					String name = splitInformation[0];
 					long startingAddress = Long.parseUnsignedLong(splitInformation[1], 16) & UINT_MASK;
 					long size = Long.parseUnsignedLong(splitInformation[2], 16) & UINT_MASK;
 					long fileOffset = Long.parseUnsignedLong(splitInformation[3], 16) & UINT_MASK;
 					
-					memMapInfo.add(new MemoryMapSectionInfo(splitInformation[0], startingAddress, size, fileOffset));
+					if (size > 0) {
+						memMapInfo.add(new MemoryMapSectionInfo(name, startingAddress, size, fileOffset));
+					}
 				}
 				catch (NumberFormatException e) {
 					Msg.error(this, "Symbol Loader: Failed to parse memory map entry: " + splitInformation[0]);
@@ -106,6 +112,9 @@ public class SymbolLoader {
 	private void ParseSymbols() {
 		symbols = new ArrayList<SymbolInfo>();
 		List<MemoryMapSectionInfo> memMapInfo = GetMemoryMapInfo();
+		var memory = this.program.getMemory();
+		var addressFactory = this.program.getAddressFactory();
+		
 		if (memMapInfo != null) {
 			long currentSectionSize = 0;
 			long effectiveAddress = this.objectAddress;
@@ -145,6 +154,36 @@ public class SymbolLoader {
 						else if (preBssAddress > -1) {
 							effectiveAddress = preBssAddress;
 							preBssAddress = 0;
+						}
+						
+						// Try to rename the memory block.
+						var sectionAddress = effectiveAddress;
+						if (currentSectionInfo.startingAddress >= this.objectAddress &&
+							currentSectionInfo.startingAddress < addressFactory.getDefaultAddressSpace().getMaxAddress().getOffset()) {
+								sectionAddress = currentSectionInfo.startingAddress;
+						}
+						var name = currentSectionInfo.name;
+						var address = addressFactory.getDefaultAddressSpace().getAddress(sectionAddress);
+						var memoryBlock = memory.getBlock(address);
+						if (memoryBlock != null) {
+							try {
+								var blockName = memoryBlock.getName();
+								var originalName = memoryBlock.getName();
+								if (blockName.contains("_")) {
+									blockName = blockName.substring(0, blockName.indexOf("_"));
+								}
+								blockName += "_" + name;
+								memoryBlock.setName(blockName);
+								this.renameFragment(address, blockName);
+								
+								Msg.info(this, String.format("Symbol Loader: set memory block name of %s to %s!", originalName, memoryBlock.getName()));
+								if (name.toLowerCase().contains("rodata")) {
+									memoryBlock.setWrite(false);
+									memoryBlock.setRead(true);
+								}
+							} catch (DuplicateNameException | LockException e) {
+								e.printStackTrace();
+							}
 						}
 					}
 					else {
@@ -192,7 +231,7 @@ public class SymbolLoader {
 						
 					SymbolInfo symbolInfo = null;
 					
-					if (virtualAddress < objectAddress && virtualAddress < program.getAddressFactory().getDefaultAddressSpace().getMaxAddress().getUnsignedOffset()) {
+					if (virtualAddress < objectAddress && virtualAddress < addressFactory.getDefaultAddressSpace().getMaxAddress().getUnsignedOffset()) {
 						// Dolphin Emulator & DOL map files have their virtual address pre-calculated.
 						virtualAddress += effectiveAddress;
 					}
@@ -209,6 +248,20 @@ public class SymbolLoader {
 					
 					symbols.add(symbolInfo);
 				}
+			}
+		}
+	}
+	
+	private void renameFragment(Address blockStart, String blockName) {
+		String[] treeNames = this.program.getListing().getTreeNames();
+		for (int i = 0; i < treeNames.length; ++i) {
+			ProgramFragment frag = this.program.getListing().getFragment(treeNames[i], blockStart);
+			
+			try {
+				frag.setName(blockName);
+			}
+			catch (DuplicateNameException e) {
+				e.printStackTrace();
 			}
 		}
 	}

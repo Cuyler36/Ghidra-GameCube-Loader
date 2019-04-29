@@ -225,7 +225,7 @@ public class RELProgramBuilder  {
 					currentOutputAddress = align(currentOutputAddress, (int) relInfo.header.bssSectionAlignment);
 				}
 				
-				this.memoryBlockUtil.createUninitializedBlock(false, relInfo.name + "_.bss", this.addressSpace.getAddress(currentOutputAddress), relInfo.header.bssSize,
+				this.memoryBlockUtil.createUninitializedBlock(false, relInfo.name + "_.uninitialized0", this.addressSpace.getAddress(currentOutputAddress), relInfo.header.bssSize,
 						"", null, true, true, false);
 				
 				// Set the bss virtual memory address.
