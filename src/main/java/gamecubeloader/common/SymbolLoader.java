@@ -11,7 +11,6 @@ import ghidra.app.util.demangler.DemanglerUtil;
 import ghidra.framework.store.LockException;
 import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.Address;
-import ghidra.program.model.address.AddressFactory;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
@@ -29,19 +28,25 @@ public class SymbolLoader {
 	
 	private Program program;
 	private TaskMonitor monitor;
+	private AddressSpace addressSpace;
 	private String[] lines;
 	private List<SymbolInfo> symbols;
 	private long objectAddress = 0;
 	private int alignment;
 	private long bssAddress;
+	private String binaryName;
 	
-	public SymbolLoader(Program program, TaskMonitor monitor, FileReader reader, long objectAddress, int alignment, long bssAddress) {
+	public SymbolLoader(Program program, TaskMonitor monitor, FileReader reader, long objectAddress, int alignment, long bssAddress,
+			String binaryName) {
 		this.program = program;
 		this.monitor = monitor;
-		lines = new BufferedReader(reader).lines().toArray(String[]::new);
+		this.addressSpace = program.getAddressFactory().getDefaultAddressSpace();
+		this.lines = new BufferedReader(reader).lines().toArray(String[]::new);
 		this.objectAddress = objectAddress;
 		this.alignment = alignment;
 		this.bssAddress = bssAddress;
+		
+		this.binaryName = binaryName;
 	}
 	
 	private List<MemoryMapSectionInfo> GetMemoryMapInfo() {
@@ -112,8 +117,6 @@ public class SymbolLoader {
 	private void ParseSymbols() {
 		symbols = new ArrayList<SymbolInfo>();
 		List<MemoryMapSectionInfo> memMapInfo = GetMemoryMapInfo();
-		var memory = this.program.getMemory();
-		var addressFactory = this.program.getAddressFactory();
 		
 		if (memMapInfo != null) {
 			long currentSectionSize = 0;
@@ -157,34 +160,7 @@ public class SymbolLoader {
 						}
 						
 						// Try to rename the memory block.
-						var sectionAddress = effectiveAddress;
-						if (currentSectionInfo.startingAddress >= this.objectAddress &&
-							currentSectionInfo.startingAddress < addressFactory.getDefaultAddressSpace().getMaxAddress().getOffset()) {
-								sectionAddress = currentSectionInfo.startingAddress;
-						}
-						var name = currentSectionInfo.name;
-						var address = addressFactory.getDefaultAddressSpace().getAddress(sectionAddress);
-						var memoryBlock = memory.getBlock(address);
-						if (memoryBlock != null) {
-							try {
-								var blockName = memoryBlock.getName();
-								var originalName = memoryBlock.getName();
-								if (blockName.contains("_")) {
-									blockName = blockName.substring(0, blockName.indexOf("_"));
-								}
-								blockName += "_" + name;
-								memoryBlock.setName(blockName);
-								this.renameFragment(address, blockName);
-								
-								Msg.info(this, String.format("Symbol Loader: set memory block name of %s to %s!", originalName, memoryBlock.getName()));
-								if (name.toLowerCase().contains("rodata")) {
-									memoryBlock.setWrite(false);
-									memoryBlock.setRead(true);
-								}
-							} catch (DuplicateNameException | LockException e) {
-								e.printStackTrace();
-							}
-						}
+						this.TryRenameMemoryBlocks(currentSectionInfo, effectiveAddress);
 					}
 					else {
 						Msg.warn(this, "Symbol Loader: No memory layout information was found for section: " + sectionName);
@@ -217,7 +193,7 @@ public class SymbolLoader {
 						virtualAddress = Long.parseUnsignedLong(splitInformation[2], 16) & UINT_MASK;
 					}
 					catch (Exception e) {
-						Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
+						//Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
 						continue;
 					}
 					
@@ -231,7 +207,7 @@ public class SymbolLoader {
 						
 					SymbolInfo symbolInfo = null;
 					
-					if (virtualAddress < objectAddress && virtualAddress < addressFactory.getDefaultAddressSpace().getMaxAddress().getUnsignedOffset()) {
+					if (virtualAddress < objectAddress && virtualAddress < this.addressSpace.getMaxAddress().getUnsignedOffset()) {
 						// Dolphin Emulator & DOL map files have their virtual address pre-calculated.
 						virtualAddress += effectiveAddress;
 					}
@@ -252,6 +228,42 @@ public class SymbolLoader {
 		}
 	}
 	
+	private String TryRenameMemoryBlocks(MemoryMapSectionInfo sectionInfo, long sectionAddress) {
+		if (sectionInfo.startingAddress >= this.objectAddress &&
+			sectionInfo.startingAddress < this.addressSpace.getMaxAddress().getOffset()) {
+				sectionAddress = sectionInfo.startingAddress;
+		}
+	
+		var name = sectionInfo.name;
+		var address = this.addressSpace.getAddress(sectionAddress);
+		var memoryBlock = this.program.getMemory().getBlock(address);
+		if (memoryBlock != null) {
+			try {
+				var blockName = memoryBlock.getName();
+				var originalName = memoryBlock.getName();
+				if (blockName.contains("_")) {
+					blockName = blockName.substring(0, blockName.indexOf("_"));
+				}
+				blockName += "_" + name;
+				memoryBlock.setName(blockName);
+				this.renameFragment(address, blockName);
+				
+				Msg.info(this, String.format("Symbol Loader: set memory block name of %s to %s!", originalName, memoryBlock.getName()));
+				if (name.toLowerCase().contains("rodata")) {
+					memoryBlock.setWrite(false);
+					memoryBlock.setRead(true);
+				}
+				
+				return memoryBlock.getName();
+			} catch (DuplicateNameException | LockException e) {
+				e.printStackTrace();
+				return memoryBlock.getName();
+			}
+		}
+		
+		return name;
+	}
+	
 	private void renameFragment(Address blockStart, String blockName) {
 		String[] treeNames = this.program.getListing().getTreeNames();
 		for (int i = 0; i < treeNames.length; ++i) {
@@ -269,8 +281,6 @@ public class SymbolLoader {
 	public void ApplySymbols() {
 		this.ParseSymbols();
 		
-		AddressFactory factory = program.getAddressFactory();
-		AddressSpace addressSpace = factory.getDefaultAddressSpace();
 		SymbolTable symbolTable = program.getSymbolTable();
 		Namespace globalNamespace = program.getGlobalNamespace();
 		
@@ -339,12 +349,12 @@ public class SymbolLoader {
 			}
 			
 			try {
-				var symbolAddress = addressSpace.getAddress(symbolInfo.virtualAddress);
+				var symbolAddress = this.addressSpace.getAddress(symbolInfo.virtualAddress);
 				symbolTable.createLabel(symbolAddress, demangledName, objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
 				
 				// If it's a function, create it.
 				if (symbolInfo.size > 3 && this.program.getMemory().getBlock(symbolAddress).isExecute()) {
-					var addressSet = new AddressSet(symbolAddress, addressSpace.getAddress(symbolInfo.virtualAddress + symbolInfo.size - 1));
+					var addressSet = new AddressSet(symbolAddress, this.addressSpace.getAddress(symbolInfo.virtualAddress + symbolInfo.size - 1));
 					try {
 						this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
 								symbolAddress, addressSet, SourceType.ANALYSIS);
@@ -358,7 +368,7 @@ public class SymbolLoader {
 				// Try applying the function arguments & return type using the demangled info.
 				if (demangledNameObject != null) {
 					try {
-						demangledNameObject.applyTo(program, addressSpace.getAddress(symbolInfo.virtualAddress), demanglerOptions, monitor);
+						demangledNameObject.applyTo(program, this.addressSpace.getAddress(symbolInfo.virtualAddress), demanglerOptions, monitor);
 					}
 					catch (Exception e) {
 						e.printStackTrace();
@@ -391,7 +401,7 @@ public class SymbolLoader {
 					return false;
 				}
 			
-				var loader = new SymbolLoader(program, monitor, fileReader, objectAddress, alignment, bssAddress);
+				var loader = new SymbolLoader(program, monitor, fileReader, objectAddress, alignment, bssAddress, binaryName);
 				loader.ApplySymbols();
 				return true;
 			}
