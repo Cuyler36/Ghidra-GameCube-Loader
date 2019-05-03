@@ -160,7 +160,14 @@ public class GameCubeLoader extends BinaryLoader {
         }
         else if (this.binaryType == BinaryType.REL) {
         	try {
-				new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor, autoLoadMaps);
+        		// We have to check if the source file is compressed & decompress it again if it is.
+        		var file = provider.getFile();
+        		Yaz0 yaz0 = new Yaz0();
+        		if (yaz0.IsValid(provider)) {
+        			provider = yaz0.Decompress(provider);
+        		}
+        		
+				new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor, file, autoLoadMaps);
 			} catch (AddressOverflowException | AddressOutOfBoundsException | MemoryAccessException e ) {
 				e.printStackTrace();
 			}

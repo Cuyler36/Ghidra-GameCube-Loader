@@ -1,5 +1,6 @@
 package gamecubeloader.rel;
 
+import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
 import java.util.*;
@@ -102,7 +103,7 @@ public class RELProgramBuilder  {
 	}
 	
 	public RELProgramBuilder(RELHeader rel, ByteProvider provider, Program program,
-			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, boolean autoloadMaps)
+			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, File originalFile, boolean autoloadMaps)
 					throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException {
 		this.rel = rel;
 		this.program = program;
@@ -112,23 +113,23 @@ public class RELProgramBuilder  {
 		this.autoloadMaps = autoloadMaps;
 		this.binaryName = provider.getName();
 		
-		this.load(provider);
+		this.load(provider, originalFile);
 	}
 	
-	protected void load(ByteProvider provider)
+	protected void load(ByteProvider provider, File originalFile)
 			throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException {
 		this.baseAddress = 0x80000000;
 		this.addressSpace = program.getAddressFactory().getDefaultAddressSpace();
 		
 		var relArray = new ArrayList<RelocatableModuleInfo>();
-		relArray.add(new RelocatableModuleInfo(rel, new BinaryReader(provider, false), FilenameUtils.getBaseName(provider.getName())));
+		relArray.add(new RelocatableModuleInfo(rel, new BinaryReader(provider, false), FilenameUtils.getBaseName(originalFile.getName())));
 		
-		var directory = provider.getFile().getParentFile();
+		var directory = originalFile.getParentFile();
 		var files = directory.listFiles();
 		for (var i = 0; i < files.length; i++) {
 			var fileName = files[i].getName();
 			
-			if (fileName == provider.getFile().getName()) continue;
+			if (fileName == originalFile.getName()) continue;
 			
 			if (this.dol == null && fileName.endsWith(".dol")) {
 				var dolProvider = new RandomAccessByteProvider(files[i]);
@@ -256,7 +257,7 @@ public class RELProgramBuilder  {
 				if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", String.format("Would you like to load a symbol map for the relocatable module %s?", relInfo.name),
 						"Yes", "No", null) == 1) {
 					var fileChooser = new GhidraFileChooser(null);
-					fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
+					fileChooser.setCurrentDirectory(originalFile.getParentFile());
 					fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));
 					var selectedFile = fileChooser.getSelectedFile(true);
 					
