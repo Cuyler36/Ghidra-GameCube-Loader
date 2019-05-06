@@ -180,7 +180,7 @@ public class SymbolLoader {
 					}
 					
 					String[] splitInformation = line.trim().split("\\s+");
-					if (splitInformation.length < 6) continue;
+					if (splitInformation.length < 5) continue;
 					
 					long startingAddress = 0;
 					long size = 0;
@@ -193,7 +193,7 @@ public class SymbolLoader {
 						virtualAddress = Long.parseUnsignedLong(splitInformation[2], 16) & UINT_MASK;
 					}
 					catch (Exception e) {
-						//Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
+						Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
 						continue;
 					}
 					
@@ -214,11 +214,11 @@ public class SymbolLoader {
 
 					if (entryInfoStart > -1)
 					{
-						symbolInfo = new SymbolInfo(splitInformation[3], splitInformation[4], startingAddress,
+						symbolInfo = new SymbolInfo(splitInformation[3], splitInformation.length >= 4 ? "" : splitInformation[4], startingAddress,
 							size, virtualAddress, 0);
 					}
 					else {
-						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation[5], startingAddress,
+						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation.length >= 5 ? "" : splitInformation[5], startingAddress,
 							size, virtualAddress, objectAlignment);
 					}
 					
@@ -316,16 +316,22 @@ public class SymbolLoader {
 			
 			try {
 				String namespaceName = symbolInfo.container;
-				int fileTypeIdx = namespaceName.lastIndexOf('.');
-				if (fileTypeIdx > -1)
-				{
-					namespaceName = namespaceName.substring(0, fileTypeIdx);
+				
+				if (namespaceName.equals("")) {
+					objectNamespace = globalNamespace;
 				}
-				
-				objectNamespace = symbolTable.getNamespace(namespaceName, globalNamespace);
-				
-				if (objectNamespace == null) {
-					objectNamespace = symbolTable.createNameSpace(globalNamespace, namespaceName, SourceType.IMPORTED);
+				else {
+					int fileTypeIdx = namespaceName.lastIndexOf('.');
+					if (fileTypeIdx > -1)
+					{
+						namespaceName = namespaceName.substring(0, fileTypeIdx);
+					}
+					
+					objectNamespace = symbolTable.getNamespace(namespaceName, globalNamespace);
+					
+					if (objectNamespace == null) {
+						objectNamespace = symbolTable.createNameSpace(globalNamespace, namespaceName, SourceType.IMPORTED);
+					}
 				}
 				
 				// Now apply the demangled namespace if one exists.
