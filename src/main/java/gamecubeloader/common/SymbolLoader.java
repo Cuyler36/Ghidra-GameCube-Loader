@@ -20,6 +20,7 @@ import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressSpace;
+import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.listing.ProgramFragment;
 import ghidra.program.model.symbol.Namespace;
@@ -129,6 +130,7 @@ public class SymbolLoader {
 			long currentSectionSize = 0;
 			long effectiveAddress = this.objectAddress;
 			long preBssAddress = -1;
+			String currentSectionName = "";
 			
 			for (int i = 0; i < lines.length; i++) {
 				String line = lines[i];
@@ -143,6 +145,7 @@ public class SymbolLoader {
 					for (MemoryMapSectionInfo sectionInfo : memMapInfo) {
 						if (sectionInfo.name.equals(sectionName)) {
 							currentSectionInfo = sectionInfo;
+							currentSectionName = sectionName;
 							break;
 						}
 					}
@@ -298,6 +301,8 @@ public class SymbolLoader {
 		{
 			if (symbolInfo.alignment == 1) continue; // Don't bother loading these for now.
 			
+			var symbolAddress = this.addressSpace.getAddress(symbolInfo.virtualAddress);
+			
 			// Demangle the name using CodeWarriors scheme.
 			DemangledObject demangledNameObject = null;
 			try {
@@ -353,14 +358,14 @@ public class SymbolLoader {
 			}
 			
 			try {
-				var symbolAddress = this.addressSpace.getAddress(symbolInfo.virtualAddress);
-				symbolTable.createLabel(symbolAddress, demangledName, objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
+				var createdSymbol = symbolTable.createLabel(symbolAddress, demangledName, objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
+				Function createdFunction = null;
 				
 				// If it's a function, create it.
 				if (symbolInfo.size > 3 && this.program.getMemory().getBlock(symbolAddress).isExecute()) {
 					var addressSet = new AddressSet(symbolAddress, this.addressSpace.getAddress(symbolInfo.virtualAddress + symbolInfo.size - 1));
 					try {
-						this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
+						createdFunction = this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
 								symbolAddress, addressSet, SourceType.ANALYSIS);
 					}
 					catch (OverlappingFunctionException | IllegalArgumentException e) {
@@ -368,13 +373,12 @@ public class SymbolLoader {
 					}
 				}
 				
-				
 				// Try applying the function arguments & return type using the demangled info.
 				if (demangledNameObject != null) {
 					try {
 						boolean res = demangledNameObject.applyTo(program, this.addressSpace.getAddress(symbolInfo.virtualAddress), demanglerOptions, monitor);
 					}
-					catch (Exception e) {
+					catch (Exception e) {						
 						e.printStackTrace();
 					}
 					
@@ -416,6 +420,7 @@ public class SymbolLoader {
 
 	public static class CodeWarriorDemangler {
 		public String str;
+		public boolean containsInvalidSpecifier;
 
 		public CodeWarriorDemangler(String g) {
 			this.str = g;
@@ -496,6 +501,10 @@ public class SymbolLoader {
 			}
 
 			int firstDunder = symbolName.indexOf("__", 1);
+			// If the symbol starts with __, exit.
+			if (firstDunder < 0)
+				return null;
+			
 			String parameters = symbolName.substring(firstDunder + 2);
 			// After the dunder comes the class, if it exists, followed by 'F', followed by parameters.
 			var demangler = new CodeWarriorDemangler(parameters);
@@ -528,6 +537,10 @@ public class SymbolLoader {
 			}
 
 			d.setOriginalMangled(symbolName);
+			
+			if (demangler.containsInvalidSpecifier)
+				return null;
+			
 			return d;
 		}
 
@@ -613,6 +626,7 @@ public class SymbolLoader {
 						break;
 
 					tok = hd();
+					
 					if (tok == '_') {
 						tk();
 						func.setReturnType(this.nextType());
@@ -631,7 +645,8 @@ public class SymbolLoader {
 				return d;
 			} else if (tok == 'A') {
 				var arraySize = this.nextInteger();
-				assert tk() == '_';
+				var typeSeparator = tk();
+				assert typeSeparator  == '_';
 				var d = this.nextType();
 				d.setArray(arraySize);
 				return d;
@@ -661,6 +676,8 @@ public class SymbolLoader {
 				return new DemangledDataType(DemangledDataType.INT);
 			} else if (tok == 'l') {
 				return new DemangledDataType(DemangledDataType.LONG);
+			} else if (tok == 'x') {
+				return new DemangledDataType(DemangledDataType.LONG_LONG);
 			} else if (tok == 'b') {
 				return new DemangledDataType(DemangledDataType.BOOL);
 			} else if (tok == 'c') {
@@ -675,8 +692,11 @@ public class SymbolLoader {
 				return new DemangledDataType(DemangledDataType.WCHAR_T);
 			} else if (tok == 'v') {
 				return new DemangledDataType(DemangledDataType.VOID);
+			} else if (tok == 'e') {
+				return new DemangledDataType(DemangledDataType.VARARGS);
 			} else {
 				// Unknown.
+				this.containsInvalidSpecifier = this.containsInvalidSpecifier || tok != '_'; // This is here in case the __ is preceded by more underscores.
 				return new DemangledDataType(DemangledDataType.UNDEFINED);
 			}
 		}
