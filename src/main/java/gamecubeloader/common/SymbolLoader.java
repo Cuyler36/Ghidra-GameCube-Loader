@@ -221,11 +221,11 @@ public class SymbolLoader {
 
 					if (entryInfoStart > -1)
 					{
-						symbolInfo = new SymbolInfo(splitInformation[3], splitInformation.length >= 4 ? "" : splitInformation[4], startingAddress,
+						symbolInfo = new SymbolInfo(splitInformation[3], splitInformation.length < 5 ? "" : splitInformation[4], startingAddress,
 							size, virtualAddress, 0);
 					}
 					else {
-						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation.length >= 5 ? "" : splitInformation[5], startingAddress,
+						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation.length < 6 ? "" : splitInformation[5], startingAddress,
 							size, virtualAddress, objectAlignment);
 					}
 					
