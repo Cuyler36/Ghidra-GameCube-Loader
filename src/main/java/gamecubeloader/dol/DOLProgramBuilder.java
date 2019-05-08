@@ -1,5 +1,6 @@
 package gamecubeloader.dol;
 
+import java.io.FileNotFoundException;
 import java.io.FileReader;
 
 import docking.widgets.OptionDialog;
@@ -69,37 +70,45 @@ public final class DOLProgramBuilder {
 			
 			// Add uninitialized sections.
 			this.CreateUninitializedSections();
+		}
+		catch (Exception e) {
+			e.printStackTrace();
+		}
 			
-			// Ask if the user wants to load a symbol map file.
-			var mapLoaded = false;
-			if (this.autoloadMaps) {
-				var name = provider.getName();
-				if (name.contains(".")) {
-					name = name.substring(0, name.lastIndexOf("."));
-				}
-				
-				mapLoaded = SymbolLoader.TryLoadAssociatedMapFile(name, provider.getFile().getParentFile(), this.program, monitor, dol.textSectionMemoryAddresses[0],
-						32, dol.bssMemoryAddress);
+		// Ask if the user wants to load a symbol map file.
+		var mapLoaded = false;
+		if (this.autoloadMaps) {
+			var name = provider.getName();
+			if (name.contains(".")) {
+				name = name.substring(0, name.lastIndexOf("."));
 			}
 			
-			if (mapLoaded == false) {
-				if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this DOL executable?", "Yes", "No", null) == 1) {
-					var fileChooser = new GhidraFileChooser(null);
-					fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
-					fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));
-					var selectedFile = fileChooser.getSelectedFile(true);
+			mapLoaded = SymbolLoader.TryLoadAssociatedMapFile(name, provider.getFile().getParentFile(), this.program, monitor, dol.textSectionMemoryAddresses[0],
+					32, dol.bssMemoryAddress);
+		}
+		
+		if (mapLoaded == false) {
+			if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this DOL executable?", "Yes", "No", null) == 1) {
+				var fileChooser = new GhidraFileChooser(null);
+				fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
+				fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));
+				var selectedFile = fileChooser.getSelectedFile(true);
+				
+				if (selectedFile != null) {
+					FileReader reader = null;
+					try {
+						reader = new FileReader(selectedFile);
+					} catch (FileNotFoundException e) {
+						Msg.error(this, String.format("Failed to open the symbol map file!\nReason: %s", e.getMessage()));
+					}
 					
-					if (selectedFile != null) {
-						FileReader reader = new FileReader(selectedFile);
+					if (reader != null) {
 						SymbolLoader loader = new SymbolLoader(this.program, monitor, reader, dol.textSectionMemoryAddresses[0], 32, dol.bssMemoryAddress,
-								this.binaryName);
+							this.binaryName);
 						loader.ApplySymbols();
 					}
 				}
 			}
-		}
-		catch (Exception e) {
-			e.printStackTrace();
 		}
 	}
 	

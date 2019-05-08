@@ -20,7 +20,6 @@ import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressSpace;
-import ghidra.program.model.listing.Function;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.listing.ProgramFragment;
 import ghidra.program.model.symbol.Namespace;
@@ -130,7 +129,6 @@ public class SymbolLoader {
 			long currentSectionSize = 0;
 			long effectiveAddress = this.objectAddress;
 			long preBssAddress = -1;
-			String currentSectionName = "";
 			
 			for (int i = 0; i < lines.length; i++) {
 				String line = lines[i];
@@ -145,7 +143,6 @@ public class SymbolLoader {
 					for (MemoryMapSectionInfo sectionInfo : memMapInfo) {
 						if (sectionInfo.name.equals(sectionName)) {
 							currentSectionInfo = sectionInfo;
-							currentSectionName = sectionName;
 							break;
 						}
 					}
@@ -217,7 +214,7 @@ public class SymbolLoader {
 						
 					SymbolInfo symbolInfo = null;
 					
-					if (virtualAddress < objectAddress && virtualAddress < this.addressSpace.getMaxAddress().getUnsignedOffset()) {
+					if (virtualAddress < 0x80000000L && virtualAddress < this.addressSpace.getMaxAddress().getUnsignedOffset()) {
 						// Dolphin Emulator & DOL map files have their virtual address pre-calculated.
 						virtualAddress += effectiveAddress;
 					}
@@ -358,14 +355,14 @@ public class SymbolLoader {
 			}
 			
 			try {
-				var createdSymbol = symbolTable.createLabel(symbolAddress, demangledName, objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
-				Function createdFunction = null;
+				symbolTable.createLabel(symbolAddress, demangledName, objectNamespace == null ? globalNamespace : objectNamespace, SourceType.ANALYSIS);
 				
 				// If it's a function, create it.
-				if (symbolInfo.size > 3 && this.program.getMemory().getBlock(symbolAddress).isExecute()) {
+				var block = this.program.getMemory().getBlock(symbolAddress);
+				if (symbolInfo.size > 3 && block != null && block.isExecute()) {
 					var addressSet = new AddressSet(symbolAddress, this.addressSpace.getAddress(symbolInfo.virtualAddress + symbolInfo.size - 1));
 					try {
-						createdFunction = this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
+						this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
 								symbolAddress, addressSet, SourceType.ANALYSIS);
 					}
 					catch (OverlappingFunctionException | IllegalArgumentException e) {
