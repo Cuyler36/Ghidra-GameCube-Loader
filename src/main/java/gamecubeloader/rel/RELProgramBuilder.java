@@ -42,6 +42,8 @@ public class RELProgramBuilder  {
 	private boolean autoloadMaps = false;
 	private String binaryName;
 	
+	private static final long EXECUTABLE_SECTION = 1;
+	
 	private static final int IMPORT_ENTRY_SIZE = 8;
 	private static final int RELOCATION_SIZE = 8;
 	
@@ -199,7 +201,7 @@ public class RELProgramBuilder  {
 				var section = relInfo.header.sections[s];
 				if (section.size != 0) {
 					if (section.address != 0) {
-						var isText = (section.address & 1) != 0;
+						var isText = (section.address & RELProgramBuilder.EXECUTABLE_SECTION) != 0;
 						var blockName = String.format("%s_%s%d", relInfo.name, isText ? ".text" : ".data", isText ? textCount : dataCount);
 						
 						this.memoryBlockUtil.createInitializedBlock(blockName, this.addressSpace.getAddress(currentOutputAddress),
@@ -235,6 +237,23 @@ public class RELProgramBuilder  {
 				relInfo.header.sections[relInfo.header.bssSectionId].address = currentOutputAddress;
 				
 				currentOutputAddress += relInfo.header.bssSize;
+			}
+			
+			// Mark the Relocatable Module's prolog, epilog, & unresolved functions as external entry points.
+			var symbolTable = this.program.getSymbolTable();
+			if (relInfo.header.prologSectionId != 0) {
+				var prologAddress = (relInfo.header.prologSectionOffset + relInfo.header.sections[relInfo.header.prologSectionId].address) & ~RELProgramBuilder.EXECUTABLE_SECTION;
+				symbolTable.addExternalEntryPoint(addressSpace.getAddress(prologAddress));
+			}
+			
+			if (relInfo.header.unresolvedSectionId != 0) {
+				var unresolvedAddress = (relInfo.header.unresolvedSectionOffset + relInfo.header.sections[relInfo.header.unresolvedSectionId].address) & ~RELProgramBuilder.EXECUTABLE_SECTION;
+				symbolTable.addExternalEntryPoint(addressSpace.getAddress(unresolvedAddress));
+			}
+			
+			if (relInfo.header.epilogSectionId != 0) {
+				var epilogAddress = (relInfo.header.epilogSectionOffset + relInfo.header.sections[relInfo.header.epilogSectionId].address) & ~RELProgramBuilder.EXECUTABLE_SECTION;
+				symbolTable.addExternalEntryPoint(addressSpace.getAddress(epilogAddress));
 			}
 			
 			// Align the output address for the next module.
