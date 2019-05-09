@@ -74,6 +74,9 @@ public final class DOLProgramBuilder {
 		catch (Exception e) {
 			e.printStackTrace();
 		}
+		
+		// Mark the DOL's entry point.
+		this.program.getSymbolTable().addExternalEntryPoint(this.addressSpace.getAddress(this.dol.entryPoint));
 			
 		// Ask if the user wants to load a symbol map file.
 		var mapLoaded = false;
