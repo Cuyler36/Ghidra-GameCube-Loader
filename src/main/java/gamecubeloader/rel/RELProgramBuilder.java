@@ -6,9 +6,11 @@ import java.io.IOException;
 import java.util.*;
 
 import org.apache.commons.io.FilenameUtils;
+import org.python.google.common.primitives.Ints;
 
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
+import gamecubeloader.common.SymbolInfo;
 import gamecubeloader.common.SymbolLoader;
 import gamecubeloader.common.Yaz0;
 import gamecubeloader.dol.DOLHeader;
@@ -23,6 +25,7 @@ import ghidra.program.model.address.AddressOverflowException;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.program.model.symbol.Symbol;
 import ghidra.util.Msg;
 import ghidra.util.filechooser.ExtensionFileFilter;
 import ghidra.util.task.TaskMonitor;
@@ -40,7 +43,10 @@ public class RELProgramBuilder  {
 	private MemoryBlockUtil memoryBlockUtil;
 	private TaskMonitor monitor;
 	private boolean autoloadMaps = false;
+	private boolean saveRelocations = false;
 	private String binaryName;
+	private Map<Long, SymbolInfo> symbolInfo;
+	private List<Map<Long, SymbolInfo>> symbolInfoList;
 	
 	private static final long EXECUTABLE_SECTION = 1;
 	
@@ -105,7 +111,8 @@ public class RELProgramBuilder  {
 	}
 	
 	public RELProgramBuilder(RELHeader rel, ByteProvider provider, Program program,
-			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, File originalFile, boolean autoloadMaps)
+			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, File originalFile,
+			boolean autoloadMaps, boolean saveRelocations)
 					throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException {
 		this.rel = rel;
 		this.program = program;
@@ -113,14 +120,16 @@ public class RELProgramBuilder  {
 		this.memoryBlockUtil = new MemoryBlockUtil(program, memConflictHandler);
 		this.monitor = monitor;
 		this.autoloadMaps = autoloadMaps;
+		this.saveRelocations = saveRelocations;
 		this.binaryName = provider.getName();
+		this.symbolInfoList = new ArrayList<Map<Long, SymbolInfo>>();
 		
 		this.load(provider, originalFile);
 	}
 	
 	protected void load(ByteProvider provider, File originalFile)
 			throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException {
-		this.baseAddress = 0x80000000;
+		this.baseAddress = 0x80000000L;
 		this.addressSpace = program.getAddressFactory().getDefaultAddressSpace();
 		
 		var relArray = new ArrayList<RelocatableModuleInfo>();
@@ -259,19 +268,23 @@ public class RELProgramBuilder  {
 			// Align the output address for the next module.
 			currentOutputAddress = align(currentOutputAddress, 0x20);
 			
-			var mapLoaded = false;
+			SymbolLoader.LoadMapResult mapLoadedResult = null;
 			if (this.autoloadMaps) {
 				var name = relInfo.name;
 				if (name.contains(".")) {
 					name = name.substring(0, name.lastIndexOf("."));
 				}
 				
-				mapLoaded = SymbolLoader.TryLoadAssociatedMapFile(name, directory, this.program, this.monitor, relBaseAddress, 0,
+				mapLoadedResult = SymbolLoader.TryLoadAssociatedMapFile(name, directory, this.program, this.monitor, relBaseAddress, 0,
 						relInfo.header.bssSectionId != 0 ? relInfo.header.sections[relInfo.header.bssSectionId].address : 0);
+				
+				if (mapLoadedResult.loaded != false) {
+					this.symbolInfoList.add(mapLoadedResult.symbolMap);
+				}
 			}
 			
 			
-			if (mapLoaded == false) {
+			if (mapLoadedResult.loaded == false) {
 				// Ask if the user wants to load a symbol map file.
 				if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", String.format("Would you like to load a symbol map for the relocatable module %s?", relInfo.name),
 						"Yes", "No", null) == 1) {
@@ -285,7 +298,7 @@ public class RELProgramBuilder  {
 						var loader = new SymbolLoader(this.program, monitor, reader, relBaseAddress, 0,
 								relInfo.header.bssSectionId != 0 ? relInfo.header.sections[relInfo.header.bssSectionId].address : 0,
 								this.binaryName);
-						loader.ApplySymbols();
+						this.symbolInfoList.add(loader.ApplySymbols());
 					}
 				}
 			}
@@ -293,6 +306,12 @@ public class RELProgramBuilder  {
 		
 		// Apply relocations.
 		for (var thisRel = 0; thisRel < relArray.size(); thisRel++) {
+			// Set the symbol info map for the current module.
+			if (thisRel < this.symbolInfoList.size())
+				this.symbolInfo = this.symbolInfoList.get(thisRel);
+			else
+				this.symbolInfo = null;
+			
 			// Do relocations against the DOL file first if it exists.
 			if (this.dol != null) {
 				this.Relocate(null, relArray.get(thisRel).header, relArray.get(thisRel).reader);
@@ -352,6 +371,18 @@ public class RELProgramBuilder  {
 				// Add the relocation's offset to the current module section write address.
 				writeAddress += relocation.offset;
 				var targetAddress = this.addressSpace.getAddress(writeAddress);
+				var inBounds = saveRelocations && writeAddress >= this.baseAddress && writeAddress < this.baseAddress + 0x01800000;
+				
+				// Store the original value at the target address.
+				var originalValue = -1;
+				if (inBounds) {
+					try {
+						originalValue = programMemory.getInt(targetAddress, true);
+					}
+					catch (Exception e) {
+						inBounds = false;
+					}
+				}
 				
 				// Set the importing section base address.
 				// NOTE: For relocations against the DOL file, the relocation addend will be a physical memory address.
@@ -436,6 +467,41 @@ public class RELProgramBuilder  {
 				default:
 					Msg.warn(this, String.format("Relocations: Unsupported relocation %X", relocation.type));
 					break;
+				}
+				
+				// Add the relocation to Ghidra's relocation table view.
+				if (inBounds) {
+					long newValue = programMemory.getInt(targetAddress, true) & 0xFFFFFFFFL;
+					if (newValue != (originalValue & 0xFFFFFFFFL)) {
+						var symbolName = "";
+						Symbol symbol = null;
+						
+						if (this.symbolInfo != null) {
+							if (this.symbolInfo.containsKey(writeAddress)) {
+								symbol = this.program.getSymbolTable().getPrimarySymbol(targetAddress);
+							}
+							else {
+								// Search symbols for an overlapping symbol. TODO: This is slow. Think of a better way.
+								if (!this.symbolInfo.isEmpty()) {
+									var iterator = this.symbolInfo.entrySet().iterator();
+									while (iterator.hasNext()) {
+										var info = iterator.next().getValue();
+										if (writeAddress >= info.virtualAddress && writeAddress < info.virtualAddress + info.size) {
+											symbol = this.program.getSymbolTable().getPrimarySymbol(this.addressSpace.getAddress(info.virtualAddress));
+											break;
+										}
+									}
+								}
+							}
+						}
+						
+						if (symbol != null)
+						{
+							symbolName = symbol.getName();
+						}
+						
+						this.program.getRelocationTable().add(targetAddress, relocation.type, new long[] {newValue}, Ints.toByteArray(originalValue), symbolName);
+					}
 				}
 				
 			} while(importsFinished == false);

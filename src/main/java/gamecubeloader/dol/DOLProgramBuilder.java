@@ -2,6 +2,7 @@ package gamecubeloader.dol;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
+import java.math.BigInteger;
 
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
@@ -11,6 +12,7 @@ import ghidra.app.util.MemoryBlockUtil;
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.importer.MemoryConflictHandler;
 import ghidra.program.model.address.AddressSpace;
+import ghidra.program.model.listing.ContextChangeException;
 import ghidra.program.model.listing.Program;
 import ghidra.util.Msg;
 import ghidra.util.filechooser.ExtensionFileFilter;
@@ -79,18 +81,18 @@ public final class DOLProgramBuilder {
 		this.program.getSymbolTable().addExternalEntryPoint(this.addressSpace.getAddress(this.dol.entryPoint));
 			
 		// Ask if the user wants to load a symbol map file.
-		var mapLoaded = false;
+		SymbolLoader.LoadMapResult mapLoadedResult = null;
 		if (this.autoloadMaps) {
 			var name = provider.getName();
 			if (name.contains(".")) {
 				name = name.substring(0, name.lastIndexOf("."));
 			}
 			
-			mapLoaded = SymbolLoader.TryLoadAssociatedMapFile(name, provider.getFile().getParentFile(), this.program, monitor, dol.textSectionMemoryAddresses[0],
+			mapLoadedResult = SymbolLoader.TryLoadAssociatedMapFile(name, provider.getFile().getParentFile(), this.program, monitor, dol.textSectionMemoryAddresses[0],
 					32, dol.bssMemoryAddress);
 		}
 		
-		if (mapLoaded == false) {
+		if (mapLoadedResult.loaded == false) {
 			if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this DOL executable?", "Yes", "No", null) == 1) {
 				var fileChooser = new GhidraFileChooser(null);
 				fileChooser.setCurrentDirectory(provider.getFile().getParentFile());

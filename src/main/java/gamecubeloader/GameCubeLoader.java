@@ -24,6 +24,7 @@ import gamecubeloader.dol.DOLProgramBuilder;
 import gamecubeloader.rel.RELHeader;
 import gamecubeloader.rel.RELProgramBuilder;
 import ghidra.app.util.Option;
+import ghidra.app.util.OptionUtils;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.importer.MemoryConflictHandler;
@@ -53,7 +54,8 @@ public class GameCubeLoader extends BinaryLoader {
 		DOL, REL
 	}
 	
-	private static final String autoloadCmd = Loader.COMMAND_LINE_ARG_PREFIX + "-autoloadMaps";
+	private static final String AUTOLOAD_MAPS_OPTION_NAME = "Automatically load symbol map files with corresponding names";
+	private static final String ADD_RELOCATIONS_OPTION_NAME = "Add relocation info to Relocation Table view (WARNING: Slow when using symbol maps)";
 	
 	private BinaryType binaryType;
 	private DOLHeader dolHeader;
@@ -145,15 +147,8 @@ public class GameCubeLoader extends BinaryLoader {
             MessageLog messageLog, Program program, TaskMonitor monitor, MemoryConflictHandler memoryConflictHandler) 
             throws IOException {
     	
-    	boolean autoLoadMaps = false;
-    	// TODO: There's definitely a better way to do this.
-    	// Seems like OptionListerner interface is probably the best way.
-    	for (var option : options) {
-    		if (option.getArg() == GameCubeLoader.autoloadCmd) {
-    			autoLoadMaps = (boolean) option.getValue();
-    			break;
-    		}
-    	}
+    	boolean autoLoadMaps = OptionUtils.getBooleanOptionValue(AUTOLOAD_MAPS_OPTION_NAME, options, true);
+    	boolean saveRelocations = OptionUtils.getBooleanOptionValue(ADD_RELOCATIONS_OPTION_NAME, options, false);
     	
         if (this.binaryType == BinaryType.DOL) {
         	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor, autoLoadMaps);
@@ -167,7 +162,8 @@ public class GameCubeLoader extends BinaryLoader {
         			provider = yaz0.Decompress(provider);
         		}
         		
-				new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor, file, autoLoadMaps);
+				new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor, file,
+						autoLoadMaps, saveRelocations);
 			} catch (AddressOverflowException | AddressOutOfBoundsException | MemoryAccessException e ) {
 				e.printStackTrace();
 			}
@@ -182,8 +178,8 @@ public class GameCubeLoader extends BinaryLoader {
 		List<Option> list =
 			super.getDefaultOptions(provider, loadSpec, domainObject, isLoadIntoProgram);
 		
-		list.add(new Option("Automatically load symbol map files with corresponding names", true, Boolean.class,
-				GameCubeLoader.autoloadCmd));
+		list.add(new Option(AUTOLOAD_MAPS_OPTION_NAME, true, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-autoloadMaps"));
+		list.add(new Option(ADD_RELOCATIONS_OPTION_NAME, false, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-saveRelocations"));
 
 		return list;
 	}

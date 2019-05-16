@@ -33,6 +33,16 @@ import ghidra.util.task.TaskMonitor;
 public class SymbolLoader {
 	private static final long UINT_MASK = 0xFFFFFFFF;
 	
+	public final static class LoadMapResult {
+		public boolean loaded;
+		public Map<Long, SymbolInfo> symbolMap;
+		
+		public LoadMapResult(boolean loaded, Map<Long, SymbolInfo> symbolMap) {
+			this.loaded = loaded;
+			this.symbolMap = symbolMap;
+		}
+	}
+	
 	private Program program;
 	private TaskMonitor monitor;
 	private AddressSpace addressSpace;
@@ -200,7 +210,7 @@ public class SymbolLoader {
 						virtualAddress = Long.parseUnsignedLong(splitInformation[2], 16) & UINT_MASK;
 					}
 					catch (Exception e) {
-						Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
+						//Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
 						continue;
 					}
 					
@@ -285,9 +295,11 @@ public class SymbolLoader {
 		}
 	}
 	
-	public void ApplySymbols() {
+	public Map<Long, SymbolInfo> ApplySymbols() {
 		this.ParseSymbols();
 		
+		// Create a Map<long, SymbolInfo> for use with relocation table creation.
+		Map<Long, SymbolInfo> symbolMap = new HashMap<Long, SymbolInfo>();
 		SymbolTable symbolTable = program.getSymbolTable();
 		Namespace globalNamespace = program.getGlobalNamespace();
 		
@@ -297,6 +309,11 @@ public class SymbolLoader {
 		for (SymbolInfo symbolInfo : symbols)
 		{
 			if (symbolInfo.alignment == 1) continue; // Don't bother loading these for now.
+			
+			// If a symbol with the current address isn't already present in the address, add it.
+			if (!symbolMap.containsKey(symbolInfo.virtualAddress)) {
+				symbolMap.put(symbolInfo.virtualAddress, symbolInfo);
+			}
 			
 			var symbolAddress = this.addressSpace.getAddress(symbolInfo.virtualAddress);
 			
@@ -385,11 +402,13 @@ public class SymbolLoader {
 				Msg.error(this, "Symbol Loader: An error occurred when attempting to load symbol: " + symbolInfo.name);
 			}
 		}
+		
+		return symbolMap;
 	}
 	
-	public static boolean TryLoadAssociatedMapFile(String binaryName, File directory, Program program, TaskMonitor monitor, long objectAddress, int alignment,
-			long bssAddress) {
-		if (directory == null) return false;
+	public static LoadMapResult TryLoadAssociatedMapFile(String binaryName, File directory, Program program, TaskMonitor monitor,
+			long objectAddress, int alignment, long bssAddress) {
+		if (directory == null) return new LoadMapResult(false, null);
 		
 		var files = directory.listFiles();
 		
@@ -403,16 +422,15 @@ public class SymbolLoader {
 					fileReader = new FileReader(files[i]);
 				} catch (FileNotFoundException e) {
 					e.printStackTrace();
-					return false;
+					return new LoadMapResult(false, null);
 				}
 			
 				var loader = new SymbolLoader(program, monitor, fileReader, objectAddress, alignment, bssAddress, binaryName);
-				loader.ApplySymbols();
-				return true;
+				return new LoadMapResult(true, loader.ApplySymbols());
 			}
 		}
 		
-		return false;
+		return new LoadMapResult(false, null);
 	}
 
 	public static class CodeWarriorDemangler {
