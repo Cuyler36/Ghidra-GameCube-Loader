@@ -282,9 +282,8 @@ public class RELProgramBuilder  {
 					this.symbolInfoList.add(mapLoadedResult.symbolMap);
 				}
 			}
-			
-			
-			if (mapLoadedResult.loaded == false) {
+
+			if (mapLoadedResult != null && mapLoadedResult.loaded == false) {
 				// Ask if the user wants to load a symbol map file.
 				if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", String.format("Would you like to load a symbol map for the relocatable module %s?", relInfo.name),
 						"Yes", "No", null) == 1) {
