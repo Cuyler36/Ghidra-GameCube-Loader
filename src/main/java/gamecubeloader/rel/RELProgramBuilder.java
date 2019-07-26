@@ -416,24 +416,20 @@ public class RELProgramBuilder  {
 				case RELProgramBuilder.R_PPC_ADDR32:
 					programMemory.setInt(targetAddress, (int)(importSectionAddress + relocation.addend), true);
 					break;
-					
+
+				case RELProgramBuilder.R_PPC_ADDR16:
 				case RELProgramBuilder.R_PPC_ADDR16_LO:
 					writeValue = (importSectionAddress + relocation.addend) & 0xFFFF;
-					
+
 					programMemory.setShort(targetAddress, (short)writeValue, true);
 					break;
-					
+
 				case RELProgramBuilder.R_PPC_ADDR16_HI:
 					writeValue = ((importSectionAddress + relocation.addend) >> 16) & 0xFFFF;
 					
 					programMemory.setShort(targetAddress, (short)writeValue, true);
-					
-				case RELProgramBuilder.R_PPC_ADDR16:
-					writeValue = (importSectionAddress + relocation.addend) & 0xFFFF;
-					
-					programMemory.setShort(targetAddress, (short)writeValue, true);
 					break;
-					
+
 				case RELProgramBuilder.R_DOLPHIN_NOP:
 				case RELProgramBuilder.R_PPC_NONE:
 					break;
