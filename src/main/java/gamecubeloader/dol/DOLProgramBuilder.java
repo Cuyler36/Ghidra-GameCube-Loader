@@ -92,7 +92,7 @@ public final class DOLProgramBuilder {
 					32, dol.bssMemoryAddress);
 		}
 		
-		if (mapLoadedResult.loaded == false) {
+		if (mapLoadedResult != null && mapLoadedResult.loaded == false) {
 			if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this DOL executable?", "Yes", "No", null) == 1) {
 				var fileChooser = new GhidraFileChooser(null);
 				fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
