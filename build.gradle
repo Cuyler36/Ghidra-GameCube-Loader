@@ -31,3 +31,85 @@ else {
 	throw new GradleException("GHIDRA_INSTALL_DIR is not defined!")
 }
 //----------------------END "DO NOT MODIFY" SECTION-------------------------------
+
+def DISTRIBUTION_DIR = file("dist")
+def PATH_IN_ZIP = "${project.name}"
+
+def getGitHash = {
+    def stdout = new ByteArrayOutputStream()
+    exec {
+        commandLine 'git', 'rev-parse', '--short', 'HEAD'
+        standardOutput = stdout
+    }
+    return stdout.toString().trim()
+}
+
+repositories {
+    mavenCentral()
+}
+
+configurations {
+    localDeps
+}
+
+dependencies {
+    compile fileTree(dir: ghidraInstallDir + '/Ghidra/Processors', include: "**/*.jar")
+    localDeps group: 'org.lz4', name: 'lz4-java', version: '1.5.1'
+    compile configurations.localDeps
+}
+
+task buildExtension (type: Zip, overwrite: true) {
+    baseName "${project.name}-${project.version}-${getGitHash()}-Ghidra_${ghidra_version}".replace(' ', '_')
+    extension 'zip'
+    destinationDir DISTRIBUTION_DIR
+    version ''
+    
+    // Make sure that we don't try to copy the same file with the same path into the
+    // zip (this can happen!)
+    duplicatesStrategy 'exclude'
+    
+    // This filtered property file copy must appear before the general 
+    // copy to ensure that it is prefered over the unmodified file
+    File propFile = new File(project.projectDir, "extension.properties")
+    from (propFile) {
+        String version = "${ghidra_version}"
+        String name = "${project.name}"
+        filter (org.apache.tools.ant.filters.ReplaceTokens, tokens: [extversion: version])
+        filter (org.apache.tools.ant.filters.ReplaceTokens, tokens: [extname: name])
+        into PATH_IN_ZIP
+    }
+    
+    from (project.jar) {
+        into PATH_IN_ZIP + "/lib"
+    }
+
+    // Copy lz4 and any other dependencies that only we rely on
+    from (configurations.localDeps) {
+        into PATH_IN_ZIP + "/lib"
+    }
+        
+    from (project.projectDir) {
+        exclude 'build/**'
+        exclude '*.gradle'
+        exclude 'certification.manifest'
+        exclude 'dist/**'
+        exclude 'bin/**'
+        exclude 'src/**'
+        exclude '.gradle/**'
+        exclude 'gradle/**'
+        exclude 'gradlew'
+        exclude 'gradlew.bat'
+        exclude '.classpath'
+        exclude '.project'
+        exclude '.settings/**'
+        exclude 'developer_scripts'
+        exclude '.antProperties.xml'
+        exclude 'eclipse/**'
+        
+        into PATH_IN_ZIP
+    }
+
+    doLast {
+        println "\nCreated " + baseName + "." + extension + " in " + destinationDir
+    }
+}
