@@ -18,6 +18,8 @@ package gamecubeloader;
 import java.io.IOException;
 import java.util.*;
 
+import gamecubeloader.apploader.ApploaderHeader;
+import gamecubeloader.apploader.ApploaderProgramBuilder;
 import gamecubeloader.common.Yaz0;
 import gamecubeloader.dol.DOLHeader;
 import gamecubeloader.dol.DOLProgramBuilder;
@@ -51,7 +53,7 @@ import ghidra.util.task.TaskMonitor;
 public class GameCubeLoader extends BinaryLoader {
 
 	private static enum BinaryType {
-		DOL, REL, UNKNOWN
+		DOL, REL, APPLOADER, UNKNOWN
 	}
 	
 	private static final String ADD_RESERVED_AND_HARDWAREREGISTERS = "Create OS global memory section & hardware register memory sections";
@@ -61,6 +63,7 @@ public class GameCubeLoader extends BinaryLoader {
 	private BinaryType binaryType = BinaryType.UNKNOWN;
 	private DOLHeader dolHeader;
 	private RELHeader relHeader;
+	private ApploaderHeader apploaderHeader;
 	
 	@Override
 	public String getName() {
@@ -94,11 +97,19 @@ public class GameCubeLoader extends BinaryLoader {
 				dolHeader = tempDolHeader;
 			}
 			else {
-				// TODO: Check for REL now.
+				// Check for REL.
 				RELHeader tempRelHeader = new RELHeader(reader);
 				if (tempRelHeader.IsValid(reader)) {
 					binaryType = BinaryType.REL;
 					relHeader = tempRelHeader;
+				}
+				else {
+					// Check for Apploader.
+					ApploaderHeader tempAppHeader = new ApploaderHeader(reader);
+					if (tempAppHeader.IsValid()) {
+						binaryType = BinaryType.APPLOADER;
+						apploaderHeader = tempAppHeader;
+					}
 				}
 			}
 		}
@@ -156,7 +167,7 @@ public class GameCubeLoader extends BinaryLoader {
 	        if (this.binaryType == BinaryType.DOL) {
 	        	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor, autoLoadMaps, createDefaultSections);
 	        }
-	        else {
+	        else if (this.binaryType == BinaryType.REL) {
 	        	try {
 	        		// We have to check if the source file is compressed & decompress it again if it is.
 	        		var file = provider.getFile();
@@ -171,6 +182,9 @@ public class GameCubeLoader extends BinaryLoader {
 					e.printStackTrace();
 				}
 	        }
+	        else {
+	        	new ApploaderProgramBuilder(apploaderHeader, provider, program, memoryConflictHandler, monitor, createDefaultSections);
+	        }
         	return true;
     	}
     	return false;
@@ -184,6 +198,7 @@ public class GameCubeLoader extends BinaryLoader {
 		
 		list.add(new Option(AUTOLOAD_MAPS_OPTION_NAME, true, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-autoloadMaps"));
 		list.add(new Option(ADD_RELOCATIONS_OPTION_NAME, false, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-saveRelocations"));
+		list.add(new Option(ADD_RESERVED_AND_HARDWAREREGISTERS, true, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-addSystemMemorySections"));
 
 		return list;
 	}
