@@ -10,6 +10,7 @@ import org.python.google.common.primitives.Ints;
 
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
+import gamecubeloader.common.SystemMemorySections;
 import gamecubeloader.common.SymbolInfo;
 import gamecubeloader.common.SymbolLoader;
 import gamecubeloader.common.Yaz0;
@@ -72,7 +73,7 @@ public class RELProgramBuilder  {
 	private static final short R_DOLPHIN_NOP = 201;
 	private static final short R_DOLPHIN_SECTION = 202;
 	private static final short R_DOLPHIN_END = 203;
-	private static final short R_DOLPHIN_MAKEREF = 204;
+	private static final short R_DOLPHIN_MRKREF = 204;
 	
 	private final class ImportEntry {
 		public long moduleId;
@@ -112,7 +113,7 @@ public class RELProgramBuilder  {
 	
 	public RELProgramBuilder(RELHeader rel, ByteProvider provider, Program program,
 			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, File originalFile,
-			boolean autoloadMaps, boolean saveRelocations)
+			boolean autoloadMaps, boolean saveRelocations, boolean createDefaultMemSections)
 					throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException {
 		this.rel = rel;
 		this.program = program;
@@ -125,6 +126,9 @@ public class RELProgramBuilder  {
 		this.symbolInfoList = new ArrayList<Map<Long, SymbolInfo>>();
 		
 		this.load(provider, originalFile);
+		if (createDefaultMemSections) {
+			SystemMemorySections.Create(program, memoryBlockUtil);
+		}
 	}
 	
 	protected void load(ByteProvider provider, File originalFile)
@@ -191,7 +195,7 @@ public class RELProgramBuilder  {
 		// If a DOL file exists, load it first.
 		if (this.dol != null) {
 			new DOLProgramBuilder(this.dol, this.dolReader.getByteProvider(), this.program, this.memConflictHandler, this.monitor,
-					this.autoloadMaps);
+					this.autoloadMaps, false);
 			currentOutputAddress = align(this.dol.memoryEndAddress, 0x20);
 		}
 		

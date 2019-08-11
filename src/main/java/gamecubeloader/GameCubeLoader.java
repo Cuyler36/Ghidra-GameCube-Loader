@@ -51,13 +51,14 @@ import ghidra.util.task.TaskMonitor;
 public class GameCubeLoader extends BinaryLoader {
 
 	private static enum BinaryType {
-		DOL, REL
+		DOL, REL, UNKNOWN
 	}
 	
+	private static final String ADD_RESERVED_AND_HARDWAREREGISTERS = "Create OS global memory section & hardware register memory sections";
 	private static final String AUTOLOAD_MAPS_OPTION_NAME = "Automatically load symbol map files with corresponding names";
 	private static final String ADD_RELOCATIONS_OPTION_NAME = "Add relocation info to Relocation Table view (WARNING: Slow when using symbol maps)";
 	
-	private BinaryType binaryType;
+	private BinaryType binaryType = BinaryType.UNKNOWN;
 	private DOLHeader dolHeader;
 	private RELHeader relHeader;
 	
@@ -147,29 +148,32 @@ public class GameCubeLoader extends BinaryLoader {
             MessageLog messageLog, Program program, TaskMonitor monitor, MemoryConflictHandler memoryConflictHandler) 
             throws IOException {
     	
-    	boolean autoLoadMaps = OptionUtils.getBooleanOptionValue(AUTOLOAD_MAPS_OPTION_NAME, options, true);
-    	boolean saveRelocations = OptionUtils.getBooleanOptionValue(ADD_RELOCATIONS_OPTION_NAME, options, false);
-    	
-        if (this.binaryType == BinaryType.DOL) {
-        	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor, autoLoadMaps);
-        }
-        else if (this.binaryType == BinaryType.REL) {
-        	try {
-        		// We have to check if the source file is compressed & decompress it again if it is.
-        		var file = provider.getFile();
-        		Yaz0 yaz0 = new Yaz0();
-        		if (yaz0.IsValid(provider)) {
-        			provider = yaz0.Decompress(provider);
-        		}
-        		
-				new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor, file,
-						autoLoadMaps, saveRelocations);
-			} catch (AddressOverflowException | AddressOutOfBoundsException | MemoryAccessException e ) {
-				e.printStackTrace();
-			}
-        }
-        
-        return true;
+    	if (this.binaryType != BinaryType.UNKNOWN) {
+	    	boolean autoLoadMaps = OptionUtils.getBooleanOptionValue(AUTOLOAD_MAPS_OPTION_NAME, options, true);
+	    	boolean saveRelocations = OptionUtils.getBooleanOptionValue(ADD_RELOCATIONS_OPTION_NAME, options, false);
+	    	boolean createDefaultSections = OptionUtils.getBooleanOptionValue(ADD_RESERVED_AND_HARDWAREREGISTERS, options, true);
+	    	
+	        if (this.binaryType == BinaryType.DOL) {
+	        	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor, autoLoadMaps, createDefaultSections);
+	        }
+	        else {
+	        	try {
+	        		// We have to check if the source file is compressed & decompress it again if it is.
+	        		var file = provider.getFile();
+	        		Yaz0 yaz0 = new Yaz0();
+	        		if (yaz0.IsValid(provider)) {
+	        			provider = yaz0.Decompress(provider);
+	        		}
+	        		
+					new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor, file,
+							autoLoadMaps, saveRelocations, createDefaultSections);
+				} catch (AddressOverflowException | AddressOutOfBoundsException | MemoryAccessException e ) {
+					e.printStackTrace();
+				}
+	        }
+        	return true;
+    	}
+    	return false;
     }
 
 	@Override

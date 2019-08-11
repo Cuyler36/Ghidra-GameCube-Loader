@@ -6,6 +6,7 @@ import java.math.BigInteger;
 
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
+import gamecubeloader.common.SystemMemorySections;
 import gamecubeloader.common.SymbolLoader;
 import gamecubeloader.dol.DOLHeader;
 import ghidra.app.util.MemoryBlockUtil;
@@ -29,7 +30,7 @@ public final class DOLProgramBuilder {
 	private String binaryName;
 	
 	public DOLProgramBuilder(DOLHeader dol, ByteProvider provider, Program program,
-			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, boolean autoloadMaps) {
+			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, boolean autoloadMaps, boolean createDefaultMemSections) {
 		this.dol = dol;
 		this.program = program;
 		this.memoryBlockUtil = new MemoryBlockUtil(program, memConflictHandler);
@@ -37,6 +38,9 @@ public final class DOLProgramBuilder {
 		this.binaryName = provider.getName();
 		
 		this.load(monitor, provider);
+		if (createDefaultMemSections) {
+			SystemMemorySections.Create(program, memoryBlockUtil);
+		}
 	}
 	
 	protected void load(TaskMonitor monitor, ByteProvider provider) {
