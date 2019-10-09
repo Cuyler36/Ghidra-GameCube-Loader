@@ -29,7 +29,6 @@ import ghidra.app.util.Option;
 import ghidra.app.util.OptionUtils;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
-import ghidra.app.util.importer.MemoryConflictHandler;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.app.util.opinion.BinaryLoader;
 import ghidra.app.util.opinion.LoadSpec;
@@ -59,6 +58,7 @@ public class GameCubeLoader extends BinaryLoader {
 	private static final String ADD_RESERVED_AND_HARDWAREREGISTERS = "Create OS global memory section & hardware register memory sections";
 	private static final String AUTOLOAD_MAPS_OPTION_NAME = "Automatically load symbol map files with corresponding names";
 	private static final String ADD_RELOCATIONS_OPTION_NAME = "Add relocation info to Relocation Table view (WARNING: Slow when using symbol maps)";
+	private static final String SPECIFY_BINARY_MEM_ADDRESSES = "Manually specify the memory address of each module loaded";
 	
 	private BinaryType binaryType = BinaryType.UNKNOWN;
 	private DOLHeader dolHeader;
@@ -136,8 +136,7 @@ public class GameCubeLoader extends BinaryLoader {
 		
 		boolean success = false;
 		try {
-			success = this.loadInto(provider, loadSpec, options, log, program, monitor,
-					MemoryConflictHandler.ALWAYS_OVERWRITE);
+			success = this.loadInto(provider, loadSpec, options, log, program, monitor);
 		}
 		finally {
 			if (!success) {
@@ -156,16 +155,17 @@ public class GameCubeLoader extends BinaryLoader {
 	
     @Override
     protected boolean loadProgramInto(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
-            MessageLog messageLog, Program program, TaskMonitor monitor, MemoryConflictHandler memoryConflictHandler) 
+            MessageLog messageLog, Program program, TaskMonitor monitor) 
             throws IOException {
     	
     	if (this.binaryType != BinaryType.UNKNOWN) {
 	    	boolean autoLoadMaps = OptionUtils.getBooleanOptionValue(AUTOLOAD_MAPS_OPTION_NAME, options, true);
 	    	boolean saveRelocations = OptionUtils.getBooleanOptionValue(ADD_RELOCATIONS_OPTION_NAME, options, false);
 	    	boolean createDefaultSections = OptionUtils.getBooleanOptionValue(ADD_RESERVED_AND_HARDWAREREGISTERS, options, true);
+	    	boolean specifyFileMemAddresses = OptionUtils.getBooleanOptionValue(SPECIFY_BINARY_MEM_ADDRESSES, options, false);
 	    	
 	        if (this.binaryType == BinaryType.DOL) {
-	        	new DOLProgramBuilder(dolHeader, provider, program, memoryConflictHandler, monitor, autoLoadMaps, createDefaultSections);
+	        	new DOLProgramBuilder(dolHeader, provider, program, monitor, autoLoadMaps, createDefaultSections);
 	        }
 	        else if (this.binaryType == BinaryType.REL) {
 	        	try {
@@ -176,14 +176,14 @@ public class GameCubeLoader extends BinaryLoader {
 	        			provider = yaz0.Decompress(provider);
 	        		}
 	        		
-					new RELProgramBuilder(relHeader, provider, program, memoryConflictHandler, monitor, file,
-							autoLoadMaps, saveRelocations, createDefaultSections);
+					new RELProgramBuilder(relHeader, provider, program, monitor, file,
+							autoLoadMaps, saveRelocations, createDefaultSections, specifyFileMemAddresses);
 				} catch (AddressOverflowException | AddressOutOfBoundsException | MemoryAccessException e ) {
 					e.printStackTrace();
 				}
 	        }
 	        else {
-	        	new ApploaderProgramBuilder(apploaderHeader, provider, program, memoryConflictHandler, monitor, createDefaultSections);
+	        	new ApploaderProgramBuilder(apploaderHeader, provider, program, monitor, createDefaultSections);
 	        }
         	return true;
     	}
@@ -199,16 +199,17 @@ public class GameCubeLoader extends BinaryLoader {
 		list.add(new Option(AUTOLOAD_MAPS_OPTION_NAME, true, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-autoloadMaps"));
 		list.add(new Option(ADD_RELOCATIONS_OPTION_NAME, false, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-saveRelocations"));
 		list.add(new Option(ADD_RESERVED_AND_HARDWAREREGISTERS, true, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-addSystemMemorySections"));
+		list.add(new Option(SPECIFY_BINARY_MEM_ADDRESSES, false, Boolean.class, Loader.COMMAND_LINE_ARG_PREFIX + "-specifyFileMemAddrs"));
 
 		return list;
 	}
 
 	@Override
-	public String validateOptions(ByteProvider provider, LoadSpec loadSpec, List<Option> options) {
+	public String validateOptions(ByteProvider provider, LoadSpec loadSpec, List<Option> options, Program program) {
 
 		// TODO: If this loader has custom options, validate them here.  Not all options require
 		// validation.
 
-		return super.validateOptions(provider, loadSpec, options);
+		return super.validateOptions(provider, loadSpec, options, program);
 	}
 }

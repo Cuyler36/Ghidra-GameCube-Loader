@@ -16,11 +16,10 @@ import gamecubeloader.common.SymbolLoader;
 import gamecubeloader.common.Yaz0;
 import gamecubeloader.dol.DOLHeader;
 import gamecubeloader.dol.DOLProgramBuilder;
-import ghidra.app.util.MemoryBlockUtil;
+import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.bin.RandomAccessByteProvider;
-import ghidra.app.util.importer.MemoryConflictHandler;
 import ghidra.program.model.address.AddressOutOfBoundsException;
 import ghidra.program.model.address.AddressOverflowException;
 import ghidra.program.model.address.AddressSpace;
@@ -40,11 +39,10 @@ public class RELProgramBuilder  {
 	private long baseAddress;
 	private AddressSpace addressSpace;
 	private Program program;
-	private MemoryConflictHandler memConflictHandler;
-	private MemoryBlockUtil memoryBlockUtil;
 	private TaskMonitor monitor;
 	private boolean autoloadMaps = false;
 	private boolean saveRelocations = false;
+	private boolean specifyModuleMemAddrs = false;
 	private String binaryName;
 	private Map<Long, SymbolInfo> symbolInfo;
 	private List<Map<Long, SymbolInfo>> symbolInfoList;
@@ -112,22 +110,21 @@ public class RELProgramBuilder  {
 	}
 	
 	public RELProgramBuilder(RELHeader rel, ByteProvider provider, Program program,
-			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, File originalFile,
-			boolean autoloadMaps, boolean saveRelocations, boolean createDefaultMemSections)
+			TaskMonitor monitor, File originalFile, boolean autoloadMaps, boolean saveRelocations,
+			boolean createDefaultMemSections, boolean specifyModuleMemAddrs)
 					throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException {
 		this.rel = rel;
 		this.program = program;
-		this.memConflictHandler = memConflictHandler;
-		this.memoryBlockUtil = new MemoryBlockUtil(program, memConflictHandler);
 		this.monitor = monitor;
 		this.autoloadMaps = autoloadMaps;
 		this.saveRelocations = saveRelocations;
+		this.specifyModuleMemAddrs = specifyModuleMemAddrs;
 		this.binaryName = provider.getName();
 		this.symbolInfoList = new ArrayList<Map<Long, SymbolInfo>>();
 		
 		this.load(provider, originalFile);
 		if (createDefaultMemSections) {
-			SystemMemorySections.Create(program, memoryBlockUtil);
+			SystemMemorySections.Create(program);
 		}
 	}
 	
@@ -194,7 +191,7 @@ public class RELProgramBuilder  {
 		
 		// If a DOL file exists, load it first.
 		if (this.dol != null) {
-			new DOLProgramBuilder(this.dol, this.dolReader.getByteProvider(), this.program, this.memConflictHandler, this.monitor,
+			new DOLProgramBuilder(this.dol, this.dolReader.getByteProvider(), this.program, this.monitor,
 					this.autoloadMaps, false);
 			currentOutputAddress = align(this.dol.memoryEndAddress, 0x20);
 		}
@@ -208,6 +205,31 @@ public class RELProgramBuilder  {
 			relInfo.header.bssSectionId = 0;
 			relBaseAddress = currentOutputAddress;
 			
+			// If we're using manually specified memory addresses, ask the user where they want this file to be loaded.
+			if (this.specifyModuleMemAddrs) {
+			    // TODO: Check against addresses already containing memory sections.
+			    var setValidAddress = false;
+			    while (!setValidAddress) {
+    			    var selectedAddress = OptionDialog.showInputSingleLineDialog(null, "Specify Memory Address", "Specify the base memory address for Module " +
+    			            FilenameUtils.getBaseName(relInfo.name), Long.toHexString(relBaseAddress));
+    			    
+    			    if (selectedAddress == null) {
+    			        break; // The user selected the cancel dialog.
+    			    }
+    			    
+    			    try {
+    			        var specifiedAddr = Long.parseUnsignedLong(selectedAddress, 16) & 0xFFFFFFFF;
+    			        if (specifiedAddr >= 0x80000000L && (specifiedAddr + relInfo.header.Size()) < 0x81800000L) {
+        			        relBaseAddress = currentOutputAddress = specifiedAddr;
+        			        setValidAddress = true;
+    			        }
+    			    }
+    			    catch (NumberFormatException e) {
+    			        continue;
+    			    }
+			    }
+			}
+			
 			var textCount = 0;
 			var dataCount = 0;
 			for (var s = 0; s < relInfo.header.sectionCount; s++) {
@@ -217,8 +239,8 @@ public class RELProgramBuilder  {
 						var isText = (section.address & RELProgramBuilder.EXECUTABLE_SECTION) != 0;
 						var blockName = String.format("%s_%s%d", relInfo.name, isText ? ".text" : ".data", isText ? textCount : dataCount);
 						
-						this.memoryBlockUtil.createInitializedBlock(blockName, this.addressSpace.getAddress(currentOutputAddress),
-								relInfo.reader.getByteProvider().getInputStream(section.address & ~1), section.size, "", null, true, true, isText, this.monitor);
+						MemoryBlockUtils.createInitializedBlock(this.program, false, blockName, this.addressSpace.getAddress(currentOutputAddress),
+								relInfo.reader.getByteProvider().getInputStream(section.address & ~1), section.size, "", null, true, true, isText, null, this.monitor);
 						
 						if (isText) textCount++;
 						else dataCount++;
@@ -243,8 +265,8 @@ public class RELProgramBuilder  {
 					currentOutputAddress = align(currentOutputAddress, (int) relInfo.header.bssSectionAlignment);
 				}
 				
-				this.memoryBlockUtil.createUninitializedBlock(false, relInfo.name + "_.uninitialized0", this.addressSpace.getAddress(currentOutputAddress), relInfo.header.bssSize,
-						"", null, true, true, false);
+				MemoryBlockUtils.createUninitializedBlock(this.program, false, relInfo.name + "_.uninitialized0", this.addressSpace.getAddress(currentOutputAddress), relInfo.header.bssSize,
+						"", null, true, true, false, null);
 				
 				// Set the bss virtual memory address.
 				relInfo.header.sections[relInfo.header.bssSectionId].address = currentOutputAddress;

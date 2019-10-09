@@ -9,9 +9,8 @@ import docking.widgets.filechooser.GhidraFileChooser;
 import gamecubeloader.common.SystemMemorySections;
 import gamecubeloader.common.SymbolLoader;
 import gamecubeloader.dol.DOLHeader;
-import ghidra.app.util.MemoryBlockUtil;
+import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.bin.ByteProvider;
-import ghidra.app.util.importer.MemoryConflictHandler;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.ContextChangeException;
 import ghidra.program.model.listing.Program;
@@ -25,21 +24,19 @@ public final class DOLProgramBuilder {
 	private long baseAddress;
 	private AddressSpace addressSpace;
 	private Program program;
-	private MemoryBlockUtil memoryBlockUtil;
 	private boolean autoloadMaps;
 	private String binaryName;
 	
 	public DOLProgramBuilder(DOLHeader dol, ByteProvider provider, Program program,
-			MemoryConflictHandler memConflictHandler, TaskMonitor monitor, boolean autoloadMaps, boolean createDefaultMemSections) {
+			TaskMonitor monitor, boolean autoloadMaps, boolean createDefaultMemSections) {
 		this.dol = dol;
 		this.program = program;
-		this.memoryBlockUtil = new MemoryBlockUtil(program, memConflictHandler);
 		this.autoloadMaps = autoloadMaps;
 		this.binaryName = provider.getName();
 		
 		this.load(monitor, provider);
 		if (createDefaultMemSections) {
-			SystemMemorySections.Create(program, memoryBlockUtil);
+			SystemMemorySections.Create(program);
 		}
 	}
 	
@@ -54,8 +51,8 @@ public final class DOLProgramBuilder {
 			// Load the DOL file.
 			for (int i = 0; i < 7; i++) {
 				if (dol.textSectionSizes[i] > 0) {
-					memoryBlockUtil.createInitializedBlock(String.format("MAIN_.text%d", i), addressSpace.getAddress(dol.textSectionMemoryAddresses[i]),
-						provider.getInputStream(dol.textSectionOffsets[i]), dol.textSectionSizes[i], "", null, true, true, true, monitor);
+					MemoryBlockUtils.createInitializedBlock(this.program, false, String.format("MAIN_.text%d", i), addressSpace.getAddress(dol.textSectionMemoryAddresses[i]),
+						provider.getInputStream(dol.textSectionOffsets[i]), dol.textSectionSizes[i], "", null, true, true, true, null, monitor);
 					
 					if (dol.memoryEndAddress < dol.textSectionMemoryAddresses[i] + dol.textSectionSizes[i]) {
 						dol.memoryEndAddress = dol.textSectionMemoryAddresses[i] + dol.textSectionSizes[i];
@@ -65,8 +62,8 @@ public final class DOLProgramBuilder {
 			
 			for (int i = 0; i < 11; i++) {
 				if (dol.dataSectionSizes[i] > 0) {
-					memoryBlockUtil.createInitializedBlock(String.format("MAIN_.data%d", i), addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
-						provider.getInputStream(dol.dataSectionOffsets[i]), dol.dataSectionSizes[i], "", null, true, true, false, monitor);
+					MemoryBlockUtils.createInitializedBlock(this.program, false, String.format("MAIN_.data%d", i), addressSpace.getAddress(dol.dataSectionMemoryAddresses[i]),
+						provider.getInputStream(dol.dataSectionOffsets[i]), dol.dataSectionSizes[i], "", null, true, true, false, null, monitor);
 					
 					if (dol.memoryEndAddress < dol.dataSectionMemoryAddresses[i] + dol.dataSectionSizes[i]) {
 						dol.memoryEndAddress = dol.dataSectionMemoryAddresses[i] + dol.dataSectionSizes[i];
@@ -138,8 +135,8 @@ public final class DOLProgramBuilder {
 					// Truncate the size and create a section.
 					var thisSectionSize = sectionAddress - uninitializedSectionAddress;
 					if (thisSectionSize > 0) {
-						var createdSection = memoryBlockUtil.createUninitializedBlock(false, String.format("MAIN_%s", "uninitialized" + uninitializedSectionIdx),
-								addressSpace.getAddress(uninitializedSectionAddress), thisSectionSize, "", null, true, true, false);
+						var createdSection = MemoryBlockUtils.createUninitializedBlock(this.program, false, String.format("MAIN_%s", "uninitialized" + uninitializedSectionIdx),
+								addressSpace.getAddress(uninitializedSectionAddress), thisSectionSize, "", null, true, true, false, null);
 						
 						if (createdSection == null) {
 							Msg.warn(this, "Failed to create uninitialized section: " + "uninitialized" + uninitializedSectionIdx);
@@ -164,8 +161,8 @@ public final class DOLProgramBuilder {
 			
 			// If we didn't create any uninitialized sections, we must be clear to write the rest of the size without intersections.
 			if (wroteSection == false) {
-				var createdSection = memoryBlockUtil.createUninitializedBlock(false, String.format("MAIN_%s", "uninitialized" + uninitializedSectionIdx),
-						addressSpace.getAddress(uninitializedSectionAddress), uninitializedSectionsSize, "", null, true, true, false);
+				var createdSection = MemoryBlockUtils.createUninitializedBlock(this.program, false, String.format("MAIN_%s", "uninitialized" + uninitializedSectionIdx),
+						addressSpace.getAddress(uninitializedSectionAddress), uninitializedSectionsSize, "", null, true, true, false, null);
 				
 				if (createdSection == null) {
 					Msg.warn(this, "Failed to create uninitialized section: " + DOLHeader.DATA_NAMES[8 + uninitializedSectionIdx]);
