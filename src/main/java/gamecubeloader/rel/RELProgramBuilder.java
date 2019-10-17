@@ -211,7 +211,7 @@ public class RELProgramBuilder  {
 			    var setValidAddress = false;
 			    while (!setValidAddress) {
     			    var selectedAddress = OptionDialog.showInputSingleLineDialog(null, "Specify Memory Address", "Specify the base memory address for Module " +
-    			            FilenameUtils.getBaseName(relInfo.name), Long.toHexString(relBaseAddress));
+    			            relInfo.name, Long.toHexString(relBaseAddress));
     			    
     			    if (selectedAddress == null) {
     			        break; // The user selected the cancel dialog.
