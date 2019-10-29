@@ -13,6 +13,7 @@ import ghidra.app.util.demangler.DemangledMethod;
 import ghidra.app.util.demangler.DemangledObject;
 import ghidra.app.util.demangler.DemangledTemplate;
 import ghidra.app.util.demangler.DemangledType;
+import ghidra.app.util.demangler.DemangledVariable;
 import ghidra.app.util.demangler.DemanglerOptions;
 import ghidra.app.util.demangler.DemanglerUtil;
 import ghidra.framework.store.LockException;
@@ -20,6 +21,7 @@ import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressSpace;
+import ghidra.program.model.listing.Listing;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.listing.ProgramFragment;
 import ghidra.program.model.symbol.Namespace;
@@ -259,7 +261,7 @@ public class SymbolLoader {
 				var blockName = memoryBlock.getName();
 				var originalName = memoryBlock.getName();
 				if (blockName.contains("_")) {
-					blockName = blockName.substring(0, blockName.indexOf("_"));
+					blockName = blockName.substring(0, blockName.lastIndexOf("_"));
 				}
 				blockName += "_" + name;
 				memoryBlock.setName(blockName);
@@ -302,6 +304,7 @@ public class SymbolLoader {
 		Map<Long, SymbolInfo> symbolMap = new HashMap<Long, SymbolInfo>();
 		SymbolTable symbolTable = program.getSymbolTable();
 		Namespace globalNamespace = program.getGlobalNamespace();
+		Listing listing = program.getListing();
 		
 		var demanglerOptions = new DemanglerOptions();
 		demanglerOptions.setApplySignature(true);
@@ -310,7 +313,7 @@ public class SymbolLoader {
 		{
 			if (symbolInfo.alignment == 1) continue; // Don't bother loading these for now.
 			
-			// If a symbol with the current address isn't already present in the address, add it.
+			// If a symbol with the current address isn't already present at the address, add it.
 			if (!symbolMap.containsKey(symbolInfo.virtualAddress)) {
 				symbolMap.put(symbolInfo.virtualAddress, symbolInfo);
 			}
@@ -441,8 +444,9 @@ public class SymbolLoader {
 			this.str = g;
 		}
 
+		public boolean isEmpty() { return this.str == null || this.str.length() < 1; }
 		public String cw(int n) { String g = this.str.substring(0, n); this.str = this.str.substring(n); return g; }
-		public char hd() { return this.str.charAt(0); }
+		public char hd() { return isEmpty() ? 0 : this.str.charAt(0); }
 		public char tk() { char hd = this.hd(); cw(1); return hd; }
 
 		public int nextInteger(char initial) {
@@ -502,7 +506,7 @@ public class SymbolLoader {
 			o.setTemplate(parser.nextTemplate());
 		}
 
-		public static DemangledFunction demangleSymbol(String symbolName) {
+		public static DemangledObject demangleSymbol(String symbolName) {
 			// If it doesn't have a __, then it's not mangled.
 			if (!symbolName.contains("__"))
 				return null;
@@ -528,35 +532,56 @@ public class SymbolLoader {
 			if (!demangler.hasFunction())
 				parentClass = demangler.nextType();
 	
-			assert demangler.hasFunction();
-			var d = demangler.nextFunction(parentClass);
-
-			if (isThunk)
-				d.setThunk(true);
-
-			String functionName = symbolName.substring(0, firstDunder);
-			String operatorName = demangleSpecialOperator(functionName);
-	
-			if (operatorName != null) {
-				d.setOverloadedOperator(true);
-				d.setName(operatorName);
-			} else {
-				if (functionName.equals("__ct"))
-					functionName = parentClass.getName();
-				else if (functionName.equals("__dt"))
-					functionName = "~" + parentClass.getName();
-	
-				d.setName(functionName);
-	
-				CodeWarriorDemangler.demangleTemplates(d);
+			if (demangler.hasFunction()) {
+    			var d = demangler.nextFunction(parentClass);
+    
+    			if (isThunk)
+    				d.setThunk(true);
+    
+    			String functionName = symbolName.substring(0, firstDunder);
+    			String operatorName = demangleSpecialOperator(functionName);
+    	
+    			if (operatorName != null) {
+    				d.setOverloadedOperator(true);
+    				d.setName(operatorName);
+    			} else {
+    				if (functionName.equals("__ct"))
+    					functionName = parentClass.getName();
+    				else if (functionName.equals("__dt"))
+    					functionName = "~" + parentClass.getName();
+    	
+    				d.setName(functionName);
+    	
+    				CodeWarriorDemangler.demangleTemplates(d);
+    			}
+    
+    			d.setOriginalMangled(symbolName);
+    			
+    			if (demangler.containsInvalidSpecifier)
+    				return null;
+    			
+    			return d;
 			}
-
-			d.setOriginalMangled(symbolName);
 			
-			if (demangler.containsInvalidSpecifier)
-				return null;
+            // It could be a member or vtable
+            if (demangler.isEmpty()) {
+                var member = new DemangledVariable(symbolName.substring(0, firstDunder));
+                
+                if (parentClass != null) {
+                    var namespace = parentClass.getNamespace();
+                    var className = parentClass.getDemangledName();
+                    // If the class has a namespace, include that as well.
+                    if (parentClass.getTemplate() != null)
+                        className += parentClass.getTemplate().toTemplate();
+                    var classNamespace = new DemangledType(className);
+                    classNamespace.setNamespace(namespace);
+                    member.setNamespace(classNamespace);
+                }
+                
+                return member;
+            }
 			
-			return d;
+			return null;
 		}
 
 		public DemangledFunction nextFunction(DemangledDataType parentClass) {
