@@ -6,8 +6,11 @@ import gamecubeloader.GameCubeLoader;
 import ghidra.app.cmd.register.SetRegisterCmd;
 import ghidra.app.services.AbstractAnalyzer;
 import ghidra.app.services.AnalyzerType;
+import ghidra.app.util.Option;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.framework.cmd.CompoundCmd;
+import ghidra.framework.options.OptionType;
+import ghidra.framework.options.Options;
 import ghidra.program.database.ProgramDB;
 import ghidra.program.database.code.CodeManager;
 import ghidra.program.model.address.Address;
@@ -20,7 +23,12 @@ import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
 public class GCAnalyzer extends AbstractAnalyzer {
-
+    private static final String SEARCH_SDA_REGISTERS_OPTION = "Search for SDA & SDA2 (ToC) Registers Initialization";
+    private static final String SEARCH_GQR_REGISTERS_OPTION = "Search for GQR Registers Initialization";
+    
+    private boolean searchSDARegs = true;
+    private boolean searchGQRRegs = true;
+    
     public GCAnalyzer() {
         super("(GameCube/Wii) Program Analyzer", "Locates and sets SDA register values & GQR register configuration.", AnalyzerType.FUNCTION_ANALYZER);
     }
@@ -30,8 +38,21 @@ public class GCAnalyzer extends AbstractAnalyzer {
         return true;
     }
     
+    @Override
     public boolean canAnalyze(Program program) {
         return program.getExecutableFormat().equals(GameCubeLoader.BIN_NAME);
+    }
+    
+    @Override
+    public void registerOptions(Options options, Program program) {
+        options.registerOption(GCAnalyzer.SEARCH_SDA_REGISTERS_OPTION, OptionType.BOOLEAN_TYPE, true, null, "");
+        options.registerOption(GCAnalyzer.SEARCH_GQR_REGISTERS_OPTION, OptionType.BOOLEAN_TYPE, true, null, "");
+    }
+    
+    @Override
+    public void optionsChanged(Options options, Program program) {
+        this.searchSDARegs = options.getBoolean(GCAnalyzer.SEARCH_SDA_REGISTERS_OPTION, true);
+        this.searchGQRRegs = options.getBoolean(GCAnalyzer.SEARCH_GQR_REGISTERS_OPTION, true);
     }
     
     @Override
@@ -39,30 +60,41 @@ public class GCAnalyzer extends AbstractAnalyzer {
             throws CancelledException {
         monitor.setMaximum(100);
         Msg.info(this, "Starting GC program analysis...");
-        monitor.setMessage("Searching for SDA register (r13)...");
-        var setSDA = trySetDefaultRegisterValue("r13", program, monitor);
-        if (setSDA == false) {
-            Msg.warn(this, "Failed to set the SDA register (r13) value!");
+        var setSDA = false;
+        var setSDA2 = false;
+        
+        if (this.searchSDARegs == true) {
+            monitor.setMessage("Searching for SDA register (r13)...");
+            setSDA = trySetDefaultRegisterValue("r13", program, monitor);
+            if (setSDA == false) {
+                Msg.warn(this, "Failed to set the SDA register (r13) value!");
+            }
         }
         monitor.setProgress(10);
-        monitor.setMessage("Searching for SDA2 (ToC) register (r2)...");
-        var setSDA2 = trySetDefaultRegisterValue("r2", program, monitor);
-        if (setSDA2 == false) {
-            Msg.warn(this, "Failed to set the SDA2 (ToC) register (r2) value!");
+        
+        if (this.searchSDARegs == true) {
+            monitor.setMessage("Searching for SDA2 (ToC) register (r2)...");
+            setSDA2 = trySetDefaultRegisterValue("r2", program, monitor);
+            if (setSDA2 == false) {
+                Msg.warn(this, "Failed to set the SDA2 (ToC) register (r2) value!");
+            }
         }
         monitor.setProgress(20);
         
-        // TODO (Cuyler): Do we want a setting to toggle searching for GQR values?
+        
         var setGQRs = false;
-        for (var i = 0; i < 8; i++) {
-            monitor.setMessage(String.format("Searching for GQR%d register...", i));
-            var setGQR = trySetGQRegister(String.format("GQR%d", i), program, monitor);
-            monitor.setProgress(30 + i * 10);
-            if (setGQR == false) {
-                Msg.warn(this, String.format("Failed to set the GQR%d register value!", i));
+        if (this.searchGQRRegs == true) {
+            for (var i = 0; i < 8; i++) {
+                monitor.setMessage(String.format("Searching for GQR%d register...", i));
+                var setGQR = trySetGQRegister(String.format("GQR%d", i), program, monitor);
+                monitor.setProgress(30 + i * 10);
+                if (setGQR == false) {
+                    Msg.warn(this, String.format("Failed to set the GQR%d register value!", i));
+                }
+                setGQRs |= setGQR;
             }
-            setGQRs |= setGQR;
         }
+        monitor.setProgress(100);
         
         return setSDA | setSDA2 | setGQRs;
     }
