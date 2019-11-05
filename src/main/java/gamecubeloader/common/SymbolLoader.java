@@ -218,7 +218,6 @@ public class SymbolLoader {
 					
 					try {
 						objectAlignment = Integer.parseInt(splitInformation[3]);
-						if (objectAlignment == 1) continue;
 					}
 					catch (NumberFormatException e) {
 						// Do nothing for the object alignment.
@@ -311,8 +310,27 @@ public class SymbolLoader {
 
 		for (SymbolInfo symbolInfo : symbols)
 		{
-			if (symbolInfo.alignment == 1) continue; // Don't bother loading these for now.
-			
+		    // Check if we're starting a new namespace
+		    if (symbolInfo.alignment == 1 && symbolInfo.name.startsWith(".") && !symbolInfo.container.equals("")) {
+		        var containerName = symbolInfo.container;
+		        if (containerName.lastIndexOf(".") > 0) {
+		            containerName = containerName.substring(0, containerName.lastIndexOf("."));
+		        }
+		        var newNamespace = symbolTable.getNamespace(containerName, globalNamespace);
+                
+                if (newNamespace == null) {
+                    try {
+                        newNamespace = symbolTable.createNameSpace(globalNamespace, containerName, SourceType.IMPORTED);
+                    }
+                    catch (DuplicateNameException | InvalidInputException e) {
+                        // Do nothing. This should never throw for DuplicateNameException.
+                        Msg.error(this, "Symbol Loader: An error occurred while creating a namespace for: " + symbolInfo.container);
+                        e.printStackTrace();
+                    }
+                }
+                continue;
+		    }
+		    
 			// If a symbol with the current address isn't already present at the address, add it.
 			if (!symbolMap.containsKey(symbolInfo.virtualAddress)) {
 				symbolMap.put(symbolInfo.virtualAddress, symbolInfo);
