@@ -16,8 +16,20 @@ import ghidra.program.database.code.CodeManager;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.address.AddressSpace;
+import ghidra.program.model.data.DataType;
+import ghidra.program.model.data.DataTypeConflictException;
+import ghidra.program.model.data.DoubleDataType;
+import ghidra.program.model.data.FloatDataType;
+import ghidra.program.model.data.Undefined1DataType;
+import ghidra.program.model.data.Undefined2DataType;
+import ghidra.program.model.data.Undefined4DataType;
 import ghidra.program.model.lang.Register;
+import ghidra.program.model.listing.Instruction;
 import ghidra.program.model.listing.Program;
+import ghidra.program.model.scalar.Scalar;
+import ghidra.program.model.symbol.RefType;
+import ghidra.program.model.symbol.SourceType;
+import ghidra.program.model.util.CodeUnitInsertionException;
 import ghidra.util.Msg;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
@@ -65,19 +77,29 @@ public class GCAnalyzer extends AbstractAnalyzer {
         
         if (this.searchSDARegs == true) {
             monitor.setMessage("Searching for SDA register (r13)...");
-            setSDA = trySetDefaultRegisterValue("r13", program, monitor);
+            var r13 = trySetDefaultRegisterValue("r13", program, monitor);
+            setSDA = r13 != null;
             if (setSDA == false) {
                 Msg.warn(this, "Failed to set the SDA register (r13) value!");
             }
-        }
-        monitor.setProgress(10);
+            monitor.setProgress(10);
         
-        if (this.searchSDARegs == true) {
             monitor.setMessage("Searching for SDA2 (ToC) register (r2)...");
-            setSDA2 = trySetDefaultRegisterValue("r2", program, monitor);
+            var r2 = trySetDefaultRegisterValue("r2", program, monitor);
+            setSDA2 = r2 != null;
             if (setSDA2 == false) {
                 Msg.warn(this, "Failed to set the SDA2 (ToC) register (r2) value!");
             }
+            
+            int numUpdated = 0;
+            var addressSpace = program.getAddressFactory().getDefaultAddressSpace();
+            var codeManager = ((ProgramDB)program).getCodeManager();
+            for (Instruction instruction : codeManager.getInstructions(addressSpace.getMinAddress(), true)) {
+                if (updateInstruction(program, r2, r13, instruction)) {
+                    numUpdated++;
+                }
+            }
+            Msg.debug(this, "Updated " + numUpdated + " SDA references");
         }
         monitor.setProgress(20);
         
@@ -115,8 +137,8 @@ public class GCAnalyzer extends AbstractAnalyzer {
         return result;
     }
     
-    protected boolean trySetDefaultRegisterValue(String registerName, Program program, TaskMonitor monitor) {
-        if (registerName == null) return false;
+    protected Address trySetDefaultRegisterValue(String registerName, Program program, TaskMonitor monitor) {
+        if (registerName == null) return null;
         
         var addressSpace = program.getAddressFactory().getDefaultAddressSpace();
         var codeManager = ((ProgramDB)program).getCodeManager();
@@ -160,11 +182,101 @@ public class GCAnalyzer extends AbstractAnalyzer {
             }
         }
         
-        if (defaultValue != 0) {
-            return setRegisterValue(registerName, defaultValue, program, codeManager, addressSpace);
+        if (defaultValue != 0 && setRegisterValue(registerName, defaultValue, program, codeManager, addressSpace)) {
+            return addressSpace.getAddress(defaultValue);
         }
         
-        return upperValueFound | lowerValueFound;
+        return null;
+    }
+    
+    private boolean updateInstruction(Program program, Address r2, Address r13, Instruction instruction) {
+        String mnemonic = instruction.getMnemonicString();
+        if (mnemonic.equals("subi")) {
+            Object[] op2 = instruction.getOpObjects(1);
+            Object[] op3 = instruction.getOpObjects(2);
+            if (op2.length == 1 && op2[0] instanceof Register && op3.length == 1 && op3[0] instanceof Scalar) {
+                Register reg = (Register)op2[0];
+                Scalar scalar = (Scalar)op3[0];
+                Address target;
+                if (reg.getName().equals("r13")) {
+                    if (r13 == null) return false;
+                    target = r13.subtract(scalar.getValue());
+                } else if (reg.getName().equals("r2")) {
+                    if (r2 == null) return false;
+                    target = r2.subtract(scalar.getValue());
+                } else {
+                    return false;
+                }
+                instruction.addOperandReference(0/* dest */, target, RefType.DATA, SourceType.ANALYSIS);
+                return true;
+            }
+        } else if (mnemonic.startsWith("l") || mnemonic.startsWith("s")) {
+            boolean load = (mnemonic.startsWith("l"));
+            Object[] op2 = instruction.getOpObjects(1);
+            if (op2.length == 2 && op2[0] instanceof Scalar && op2[1] instanceof Register) {
+                // Make a jank assumption that this implies load/store
+                Register reg = (Register)op2[1];
+                Scalar scalar = (Scalar)op2[0];
+                Address target;
+                if (reg.getName().equals("r13")) {
+                    if (r13 == null) return false;
+                    target = r13.add(scalar.getValue());
+                } else if (reg.getName().equals("r2")) {
+                    if (r2 == null) return false;
+                    target = r2.add(scalar.getValue());
+                } else {
+                    return false;
+                }
+                instruction.addOperandReference(1/* dest */, target, load ? RefType.READ : RefType.WRITE, SourceType.ANALYSIS);
+                updateDataTypeFromInstruction(program, mnemonic, load, target);
+                return true;
+            }
+        }
+        return false;
+    }
+
+    protected void updateDataTypeFromInstruction(Program program, String mnemonic, boolean load, Address address) {
+        // Based on this: https://github.com/NationalSecurityAgency/ghidra/blob/49c2010b63b56c8f20845f3970fedd95d003b1e9/Ghidra/Processors/PowerPC/src/main/java/ghidra/app/plugin/core/analysis/PowerPCAddressAnalyzer.java#L600-L634
+        char datatype = mnemonic.charAt(load ? 1 : 2); // The original code always uses 1 for both loads (l_z usually) and stores (st_), which doesn't work
+        DataType dt = null;
+        switch (datatype) {
+            //case 'd': // Not a thing here
+            //  dt = Undefined8DataType.dataType;
+            //  break;
+            case 'w':
+                dt = Undefined4DataType.dataType;
+                break;
+            case 'h':
+                dt = Undefined2DataType.dataType;
+                break;
+            case 'b':
+                dt = Undefined1DataType.dataType;
+                break;
+            // Missing in the original
+            case 'f':
+                // lfs[u][x], stfs[u][x] for single
+                // lfd[u][x], stfd[u][x] for double
+                switch (mnemonic.charAt(load ? 2 : 3)) {
+                case 's':
+                    dt = FloatDataType.dataType;
+                    break;
+                case 'd':
+                    dt = DoubleDataType.dataType;
+                    break;
+                }
+                break;
+        }
+        if (dt != null) {
+            try {
+                program.getListing().createData(address, dt);
+            }
+            catch (CodeUnitInsertionException e) {
+                // ignore
+            }
+            catch (DataTypeConflictException e) {
+                // ignore
+            }
+        }
     }
     
     protected boolean trySetGQRegister(String gqrName, Program program, TaskMonitor monitor) {
