@@ -269,10 +269,6 @@ public class SymbolLoader {
                         // Align the end address
                         endAddr = (endAddr + this.alignment - 1) & ~(this.alignment - 1);
                     }
-                    var align = this.alignment - 1;
-                    if (this.alignment > 1 && (effectiveAddress & align) != 0 || (endAddr & align) != 0) {
-                        Msg.info(this, "Fuck.");
-                    }
                     effectiveAddress = endAddr;
                 }
                 

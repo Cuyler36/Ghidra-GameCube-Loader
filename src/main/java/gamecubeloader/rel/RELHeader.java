@@ -80,6 +80,11 @@ public class RELHeader {
 				this.sectionAlignment = reader.readNextUnsignedInt();
 				this.bssSectionAlignment = reader.readNextUnsignedInt();
 			}
+			else {
+			    // Version 1's default values for alignment
+			    this.sectionAlignment = 32;
+			    this.bssSectionAlignment = 32;
+			}
 			
 			if (this.moduleVersion > 2) {
 				this.fixSize = reader.readNextUnsignedInt();
