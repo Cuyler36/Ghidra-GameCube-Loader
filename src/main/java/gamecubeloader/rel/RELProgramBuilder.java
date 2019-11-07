@@ -301,7 +301,7 @@ public class RELProgramBuilder  {
 					name = name.substring(0, name.lastIndexOf("."));
 				}
 				
-				mapLoadedResult = SymbolLoader.TryLoadAssociatedMapFile(name, directory, this.program, this.monitor, relBaseAddress, 0,
+				mapLoadedResult = SymbolLoader.TryLoadAssociatedMapFile(name, directory, this.program, this.monitor, relBaseAddress, (int)relInfo.header.sectionAlignment,
 						relInfo.header.bssSectionId != 0 ? relInfo.header.sections[relInfo.header.bssSectionId].address : 0);
 				
 				if (mapLoadedResult.loaded != false) {

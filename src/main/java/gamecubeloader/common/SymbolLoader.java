@@ -21,7 +21,6 @@ import ghidra.program.database.function.OverlappingFunctionException;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.address.AddressSpace;
-import ghidra.program.model.listing.Listing;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.listing.ProgramFragment;
 import ghidra.program.model.symbol.Namespace;
@@ -130,7 +129,7 @@ public class SymbolLoader {
 		
 		// TODO: This shouldn't be thrown for symbol maps that are previous formats.
 		Msg.warn(this, "Symbol Loader: The memory map information couldn't be located. This symbol map may not be loaded correctly.");
-		return memMapInfo;
+		return null;
 	}
 	
 	private void ParseSymbols() {
@@ -244,6 +243,111 @@ public class SymbolLoader {
 				}
 			}
 		}
+		else {
+		    ParseSymbolsNoMemoryMap();
+		}
+	}
+	
+	private void ParseSymbolsNoMemoryMap() {
+	    symbols = new ArrayList<SymbolInfo>();
+        long effectiveAddress = this.objectAddress;
+        long preBssAddress = -1;
+        SymbolInfo currentSymbolInfo = null;
+        
+        for (int i = 0; i < lines.length; i++) {
+            String line = lines[i];
+            if (line.equals("") || line.trim().length() == 0) continue;
+            
+            if (line.contains(" section layout")) {
+                String sectionName = line.substring(0, line.indexOf(" section layout")).trim();
+                Msg.info(this, "Symbol Loader: Switched to symbols for section: " + sectionName);
+                
+                // Since we don't have any Memory Map info, use the section alignment passed in & the current end address.
+                if (currentSymbolInfo != null) {
+                    var endAddr = currentSymbolInfo.virtualAddress + currentSymbolInfo.size;
+                    if (this.alignment > 1 && (this.alignment & 1) == 0) {
+                        // Align the end address
+                        endAddr = (endAddr + this.alignment - 1) & ~(this.alignment - 1);
+                    }
+                    var align = this.alignment - 1;
+                    if (this.alignment > 1 && (effectiveAddress & align) != 0 || (endAddr & align) != 0) {
+                        Msg.info(this, "Fuck.");
+                    }
+                    effectiveAddress = endAddr;
+                }
+                
+                // Check if we should switch to using the bss section address.
+                if (sectionName.equals(".bss") && bssAddress != -1) {
+                    preBssAddress = effectiveAddress;
+                    effectiveAddress = bssAddress;
+                }
+                else if (preBssAddress > -1) {
+                    effectiveAddress = preBssAddress;
+                    preBssAddress = 0;
+                }
+                
+                // Try to rename the memory block.
+                this.TryRenameMemoryBlocks(new MemoryMapSectionInfo(sectionName, effectiveAddress, 0, 0), effectiveAddress);
+                
+                if (i + 1 < lines.length && lines[i + 1].trim().startsWith("Starting")) {
+                    i += 3; // Skip past the section column data.
+                }
+            }
+            else {
+                var entryInfoStart = line.indexOf("(entry of ");
+                if (entryInfoStart > -1) {
+                    var entryInfoEnd = line.indexOf(')');
+                    if (entryInfoEnd > -1) {
+                        line = line.substring(0, entryInfoStart) + line.substring(entryInfoEnd + 1);
+                    }
+                }
+                
+                String[] splitInformation = line.trim().split("\\s+");
+                if (splitInformation.length < 5) continue;
+                
+                long startingAddress = 0;
+                long size = 0;
+                long virtualAddress = 0;
+                int objectAlignment = 0;
+                
+                try {
+                    startingAddress = Long.parseUnsignedLong(splitInformation[0], 16) & UINT_MASK;
+                    size = Long.parseUnsignedLong(splitInformation[1], 16) & UINT_MASK;
+                    virtualAddress = Long.parseUnsignedLong(splitInformation[2], 16) & UINT_MASK;
+                }
+                catch (Exception e) {
+                    //Msg.error(this, "Symbol Loader: Unable to parse symbol information for symbol: " + line);
+                    continue;
+                }
+                
+                try {
+                    objectAlignment = Integer.parseInt(splitInformation[3]);
+                }
+                catch (NumberFormatException e) {
+                    // Do nothing for the object alignment.
+                }
+                    
+                SymbolInfo symbolInfo = null;
+                
+                if (virtualAddress < 0x80000000L && virtualAddress < this.addressSpace.getMaxAddress().getUnsignedOffset()) {
+                    // Dolphin Emulator & DOL map files have their virtual address pre-calculated.
+                    virtualAddress += effectiveAddress;
+                }
+
+                if (entryInfoStart > -1)
+                {
+                    symbolInfo = new SymbolInfo(splitInformation[3], splitInformation.length < 5 ? "" : splitInformation[4], startingAddress,
+                        size, virtualAddress, 0);
+                }
+                else {
+                    symbolInfo = new SymbolInfo(splitInformation[4], splitInformation.length < 6 ? "" : splitInformation[5], startingAddress,
+                        size, virtualAddress, objectAlignment);
+                }
+                
+                symbols.add(symbolInfo);
+                currentSymbolInfo = symbolInfo;
+            }
+        }
 	}
 	
 	private String TryRenameMemoryBlocks(MemoryMapSectionInfo sectionInfo, long sectionAddress) {
@@ -303,7 +407,6 @@ public class SymbolLoader {
 		Map<Long, SymbolInfo> symbolMap = new HashMap<Long, SymbolInfo>();
 		SymbolTable symbolTable = program.getSymbolTable();
 		Namespace globalNamespace = program.getGlobalNamespace();
-		Listing listing = program.getListing();
 		
 		var demanglerOptions = new DemanglerOptions();
 		demanglerOptions.setApplySignature(true);
@@ -411,7 +514,7 @@ public class SymbolLoader {
 				// Try applying the function arguments & return type using the demangled info.
 				if (demangledNameObject != null) {
 					try {
-						boolean res = demangledNameObject.applyTo(program, this.addressSpace.getAddress(symbolInfo.virtualAddress), demanglerOptions, monitor);
+						demangledNameObject.applyTo(program, this.addressSpace.getAddress(symbolInfo.virtualAddress), demanglerOptions, monitor);
 					}
 					catch (Exception e) {						
 						e.printStackTrace();
@@ -655,12 +758,11 @@ public class SymbolLoader {
 				if (hd() == '>' || hd() == ',') {
 					// Literal integer (template)
 					return new DemangledDataType("" + value);
-				} else {
-					// Name.
-					var d = new DemangledDataType(cw(value));
-					demangleTemplates(d);
-					return d;
 				}
+                // Name.
+                var d = new DemangledDataType(cw(value));
+                demangleTemplates(d);
+                return d;
 			} else if (tok == 'Q') {
 				// Qualified name.
 				int compCount = tk() - '0';
@@ -689,9 +791,9 @@ public class SymbolLoader {
 						tk();
 						func.setReturnType(this.nextType());
 						break;
-					} else {
-						func.addParameter(this.nextType());
 					}
+					
+                    func.addParameter(this.nextType());
 				}
 
 				demangleTemplates(func);
