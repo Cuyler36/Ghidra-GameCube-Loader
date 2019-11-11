@@ -44,6 +44,11 @@ def getGitHash = {
     return stdout.toString().trim()
 }
 
+wrapper {
+	gradleVersion = '5.0'
+    distributionType = Wrapper.DistributionType.BIN
+}
+
 repositories {
     mavenCentral()
 }
