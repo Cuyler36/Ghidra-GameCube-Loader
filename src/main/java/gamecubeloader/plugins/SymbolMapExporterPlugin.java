@@ -37,6 +37,7 @@ import ghidra.framework.plugintool.PluginInfo;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.program.database.ProgramDB;
+import ghidra.util.Msg;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.filechooser.ExtensionFileFilter;
 
@@ -122,40 +123,45 @@ public class SymbolMapExporterPlugin extends ProgramPlugin implements ChangeList
         fileChooser.setTitle("Select an output file");
         fileChooser.setFileSelectionMode(GhidraFileChooserMode.FILES_ONLY);
         var selectedFile = fileChooser.getSelectedFile(true);
-        var writer = new PrintWriter(new FileWriter(selectedFile));
-        var symTable = this.currentProgram.getSymbolTable();
-        for (var sym : symTable.getAllSymbols(true)) {
-            var addr = sym.getAddress().getUnsignedOffset();
-            if (addr < 0x80000000L || addr >= 0x81800000L)
-                continue; // Ignore out of range addresses
-            
-            var symName = sym.getName();
-            if (symName.startsWith("LAB_") || symName.startsWith("DAT_") || symName.startsWith("PTR_") || symName.startsWith("caseD_") || symName.equals("switchD"))
-                continue; // Don't save Ghidra generated symbols.
-            var alignment = 8;
-            var size = 1L;
-            var func = this.currentProgram.getFunctionManager().getFunctionAt(sym.getAddress());
-            if (func != null) {
-                size = func.getBody().getMaxAddress().getUnsignedOffset() - func.getBody().getMinAddress().getUnsignedOffset() + 1;
-                alignment = 4;
-            }
-            else {
-                var memBlock = this.currentProgram.getMemory().getBlock(sym.getAddress());
-                if (memBlock != null && memBlock.isExecute() == false) {
-                    var cm = ((ProgramDB)this.currentProgram).getCodeManager();
-                    var data = cm.getDataAt(sym.getAddress());
-                    if (data != null) {
-                        size = data.getDataType().getLength();
-                        alignment = data.getDataType().getAlignment();
-                        if (size < 1) {
-                            size = 1;
+        if (selectedFile != null) {
+            var writer = new PrintWriter(new FileWriter(selectedFile));
+            var symTable = this.currentProgram.getSymbolTable();
+            for (var sym : symTable.getAllSymbols(true)) {
+                var addr = sym.getAddress().getUnsignedOffset();
+                if (addr < 0x80000000L || addr >= 0x81800000L)
+                    continue; // Ignore out of range addresses
+                
+                var symName = sym.getName();
+                if (symName.startsWith("LAB_") || symName.startsWith("DAT_") || symName.startsWith("PTR_") || symName.startsWith("caseD_") || symName.equals("switchD"))
+                    continue; // Don't save Ghidra generated symbols.
+                var alignment = 8;
+                var size = 1L;
+                var func = this.currentProgram.getFunctionManager().getFunctionAt(sym.getAddress());
+                if (func != null) {
+                    size = func.getBody().getMaxAddress().getUnsignedOffset() - func.getBody().getMinAddress().getUnsignedOffset() + 1;
+                    alignment = 4;
+                }
+                else {
+                    var memBlock = this.currentProgram.getMemory().getBlock(sym.getAddress());
+                    if (memBlock != null && memBlock.isExecute() == false) {
+                        var cm = ((ProgramDB)this.currentProgram).getCodeManager();
+                        var data = cm.getDataAt(sym.getAddress());
+                        if (data != null) {
+                            size = data.getDataType().getLength();
+                            alignment = data.getDataType().getAlignment();
+                            if (size < 1) {
+                                size = 1;
+                            }
                         }
                     }
                 }
+                writer.println(String.format("  %08x %06x %08x %2s %s \t%s", addr, size, addr, Integer.toString(alignment), symName, sym.getParentNamespace().getName()));
             }
-            writer.println(String.format("  %08x %06x %08x %2s %s \t%s", addr, size, addr, Integer.toString(alignment), symName, sym.getParentNamespace().getName()));
+            writer.close();
         }
-        writer.close();
+        else {
+            Msg.info(this, "A valid map file path must be selected!");
+        }
     }
 
     /**
