@@ -162,11 +162,6 @@ public class SymbolLoader {
 						effectiveAddress += currentSectionSize;
 						currentSectionSize = currentSectionInfo.size;
 						
-						// Align the effective address to the section alignment.
-						if (alignment > 0) {
-							effectiveAddress += (alignment - (effectiveAddress % alignment));
-						}
-						
 						// Check if we should switch to using the bss section address.
 						if (currentSectionInfo.name.equals(".bss") && bssAddress != -1) {
 							preBssAddress = effectiveAddress;
