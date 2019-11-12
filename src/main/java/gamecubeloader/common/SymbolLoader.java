@@ -494,8 +494,8 @@ public class SymbolLoader {
 				if (symbolInfo.size > 3 && block != null && block.isExecute()) {
 					var addressSet = new AddressSet(symbolAddress, this.addressSpace.getAddress(symbolInfo.virtualAddress + symbolInfo.size - 1));
 					try {
-						this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
-								symbolAddress, addressSet, SourceType.ANALYSIS);
+    					this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
+    							symbolAddress, addressSet, SourceType.ANALYSIS);
 					}
 					catch (OverlappingFunctionException | IllegalArgumentException e) {
 						e.printStackTrace();
@@ -559,6 +559,7 @@ public class SymbolLoader {
 		public boolean isEmpty() { return this.str == null || this.str.length() < 1; }
 		public String cw(int n) { String g = this.str.substring(0, n); this.str = this.str.substring(n); return g; }
 		public char hd() { return isEmpty() ? 0 : this.str.charAt(0); }
+		public boolean isConstFunc() { return (isEmpty() || this.str.length() < 2) ? false : this.str.startsWith("CF") || this.str.startsWith("cF"); }
 		public char tk() { char hd = this.hd(); cw(1); return hd; }
 
 		public int nextInteger(char initial) {
@@ -636,6 +637,11 @@ public class SymbolLoader {
 			if (firstDunder < 0)
 				return null;
 			
+			// Ensure that any trailing underscores in the function name are accounted for
+			while (symbolName.charAt(firstDunder + 2) == '_') {
+			    firstDunder++;
+			}
+			
 			String parameters = symbolName.substring(firstDunder + 2);
 			// After the dunder comes the class, if it exists, followed by 'F', followed by parameters.
 			var demangler = new CodeWarriorDemangler(parameters);
@@ -644,8 +650,10 @@ public class SymbolLoader {
 			if (!demangler.hasFunction())
 				parentClass = demangler.nextType();
 	
-			if (demangler.hasFunction()) {
+			var isConstFunc = demangler.isConstFunc();
+			if (isConstFunc || demangler.hasFunction()) {
     			var d = demangler.nextFunction(parentClass);
+    			d.setOriginalMangled(symbolName);
     
     			if (isThunk)
     				d.setThunk(true);
@@ -678,6 +686,7 @@ public class SymbolLoader {
             // It could be a member or vtable
             if (demangler.isEmpty()) {
                 var member = new DemangledVariable(symbolName.substring(0, firstDunder));
+                member.setOriginalMangled(symbolName);
                 
                 if (parentClass != null) {
                     var namespace = parentClass.getNamespace();
@@ -702,13 +711,18 @@ public class SymbolLoader {
 			DemangledFunction func;
 			if (parentClass != null) {
 				func = new DemangledMethod(null);
+				func.setCallingConvention("__thiscall");
 			} else {
 				func = new DemangledFunction(null);
+				func.setCallingConvention("__stdcall");
 			}
 
 			if (tok == 'C') {
 				func.setTrailingConst();
 				tok = tk();
+			}
+			else if (tok == 'c') {
+			    func.setConst(true);
 			}
 			assert tok == 'F';
 
