@@ -184,10 +184,12 @@ public class SymbolLoader {
 					}
 				}
 				else {
+				    var isSubEntry = false;
 					var entryInfoStart = line.indexOf("(entry of ");
 					if (entryInfoStart > -1) {
 						var entryInfoEnd = line.indexOf(')');
 						if (entryInfoEnd > -1) {
+						    isSubEntry = true;
 							line = line.substring(0, entryInfoStart) + line.substring(entryInfoEnd + 1);
 						}
 					}
@@ -227,11 +229,11 @@ public class SymbolLoader {
 					if (entryInfoStart > -1)
 					{
 						symbolInfo = new SymbolInfo(splitInformation[3], splitInformation.length < 5 ? "" : splitInformation[4], startingAddress,
-							size, virtualAddress, 0);
+							size, virtualAddress, 0, isSubEntry);
 					}
 					else {
 						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation.length < 6 ? "" : splitInformation[5], startingAddress,
-							size, virtualAddress, objectAlignment);
+							size, virtualAddress, objectAlignment, isSubEntry);
 					}
 					
 					symbols.add(symbolInfo);
@@ -285,11 +287,13 @@ public class SymbolLoader {
                 }
             }
             else {
+                var isSubEntry = false;
                 var entryInfoStart = line.indexOf("(entry of ");
                 if (entryInfoStart > -1) {
                     var entryInfoEnd = line.indexOf(')');
                     if (entryInfoEnd > -1) {
                         line = line.substring(0, entryInfoStart) + line.substring(entryInfoEnd + 1);
+                        isSubEntry = true;
                     }
                 }
                 
@@ -325,14 +329,14 @@ public class SymbolLoader {
                     virtualAddress += effectiveAddress;
                 }
 
-                if (entryInfoStart > -1)
+                if (entryInfoStart > -1 && objectAlignment == 1)
                 {
                     symbolInfo = new SymbolInfo(splitInformation[3], splitInformation.length < 5 ? "" : splitInformation[4], startingAddress,
-                        size, virtualAddress, 0);
+                        size, virtualAddress, 0, isSubEntry);
                 }
                 else {
                     symbolInfo = new SymbolInfo(splitInformation[4], splitInformation.length < 6 ? "" : splitInformation[5], startingAddress,
-                        size, virtualAddress, objectAlignment);
+                        size, virtualAddress, objectAlignment, isSubEntry);
                 }
                 
                 symbols.add(symbolInfo);
@@ -405,23 +409,25 @@ public class SymbolLoader {
 		for (SymbolInfo symbolInfo : symbols)
 		{
 		    // Check if we're starting a new namespace
-		    if (symbolInfo.alignment == 1 && symbolInfo.name.startsWith(".") && !symbolInfo.container.equals("")) {
-		        var containerName = symbolInfo.container;
-		        if (containerName.lastIndexOf(".") > 0) {
-		            containerName = containerName.substring(0, containerName.lastIndexOf("."));
+		    if (symbolInfo.isSubEntry) {
+		        if (!symbolInfo.container.equals("")) {
+    		        var containerName = symbolInfo.container;
+    		        if (containerName.lastIndexOf(".") > 0) {
+    		            containerName = containerName.substring(0, containerName.lastIndexOf("."));
+    		        }
+    		        var newNamespace = symbolTable.getNamespace(containerName, globalNamespace);
+                    
+                    if (newNamespace == null) {
+                        try {
+                            newNamespace = symbolTable.createNameSpace(globalNamespace, containerName, SourceType.IMPORTED);
+                        }
+                        catch (DuplicateNameException | InvalidInputException e) {
+                            // Do nothing. This should never throw for DuplicateNameException.
+                            Msg.error(this, "Symbol Loader: An error occurred while creating a namespace for: " + symbolInfo.container);
+                            e.printStackTrace();
+                        }
+                    }
 		        }
-		        var newNamespace = symbolTable.getNamespace(containerName, globalNamespace);
-                
-                if (newNamespace == null) {
-                    try {
-                        newNamespace = symbolTable.createNameSpace(globalNamespace, containerName, SourceType.IMPORTED);
-                    }
-                    catch (DuplicateNameException | InvalidInputException e) {
-                        // Do nothing. This should never throw for DuplicateNameException.
-                        Msg.error(this, "Symbol Loader: An error occurred while creating a namespace for: " + symbolInfo.container);
-                        e.printStackTrace();
-                    }
-                }
                 continue;
 		    }
 		    
