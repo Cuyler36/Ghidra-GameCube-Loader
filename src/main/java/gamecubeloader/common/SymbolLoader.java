@@ -140,6 +140,7 @@ public class SymbolLoader {
 			long currentSectionSize = 0;
 			long effectiveAddress = this.objectAddress;
 			long preBssAddress = -1;
+			String currentSectionName = "";
 			
 			for (int i = 0; i < lines.length; i++) {
 				String line = lines[i];
@@ -154,6 +155,7 @@ public class SymbolLoader {
 					for (MemoryMapSectionInfo sectionInfo : memMapInfo) {
 						if (sectionInfo.name.equals(sectionName)) {
 							currentSectionInfo = sectionInfo;
+							currentSectionName = sectionName;
 							break;
 						}
 					}
@@ -177,6 +179,7 @@ public class SymbolLoader {
 					}
 					else {
 						Msg.warn(this, "Symbol Loader: No memory layout information was found for section: " + sectionName);
+						currentSectionName = "";
 					}
 					
 					if (i + 1 < lines.length && lines[i + 1].trim().startsWith("Starting")) {
@@ -234,6 +237,10 @@ public class SymbolLoader {
 					else {
 						symbolInfo = new SymbolInfo(splitInformation[4], splitInformation.length < 6 ? "" : splitInformation[5], startingAddress,
 							size, virtualAddress, objectAlignment, isSubEntry);
+					}
+					
+					if (!symbolInfo.isSubEntry && symbolInfo.name.equals(currentSectionName)) {
+					    symbolInfo.isSubEntry = true;
 					}
 					
 					symbols.add(symbolInfo);
