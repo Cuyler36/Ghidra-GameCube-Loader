@@ -603,7 +603,6 @@ public class SymbolLoader {
 				if (tok == '>')
 					break;
 				assert tok == '<' || tok == ',';
-
 				var type = this.nextType();
 				template.addParameter(type);
 			}
@@ -617,8 +616,16 @@ public class SymbolLoader {
 				return;
 			var rb = name.lastIndexOf('>');
 			var parser = new CodeWarriorDemangler(name.substring(lb, rb + 1));
+			var template = parser.nextTemplate();
 			o.setName(name.substring(0, lb));
-			o.setTemplate(parser.nextTemplate());
+			for (var param : template.getParameters()) {
+			    if (param.isPrimitive()) {
+			        o.setName(name.substring(0, lb) + template.toTemplate());
+			        break;
+			    }
+			}
+			
+			o.setTemplate(template);
 		}
 
 		private static void demangleTemplates(DemangledFunction o) {
