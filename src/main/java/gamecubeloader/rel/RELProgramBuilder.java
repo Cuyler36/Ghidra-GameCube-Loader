@@ -249,6 +249,11 @@ public class RELProgramBuilder  {
 						section.address = currentOutputAddress;
 						
 						currentOutputAddress += section.size;
+						
+						// Ensure output address is aligned to 4 bytes
+						if ((currentOutputAddress & 3) != 0) {
+						    currentOutputAddress = (currentOutputAddress + 4) & ~3;
+						}
 					}
 					else if (relInfo.header.bssSectionId == 0) {
 						relInfo.header.bssSectionId = s;
