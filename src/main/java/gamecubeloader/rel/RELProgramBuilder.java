@@ -145,12 +145,12 @@ public class RELProgramBuilder  {
 			
 			if (this.dol == null && fileName.endsWith(".dol")) {
 				var dolProvider = new RandomAccessByteProvider(files[i]);
-				var dolReader = new BinaryReader(dolProvider, false);
-				var dolHeader = new DOLHeader(dolReader);
+				var dol_reader = new BinaryReader(dolProvider, false);
+				var dolHeader = new DOLHeader(dol_reader);
 				
 				if (dolHeader.CheckHeaderIsValid()) {
 					this.dol = dolHeader;
-					this.dolReader = dolReader;
+					this.dolReader = dol_reader;
 				}
 			}
 			else if (fileName.endsWith(".rel") || fileName.endsWith(".szs") || fileName.endsWith(".yaz0")) {

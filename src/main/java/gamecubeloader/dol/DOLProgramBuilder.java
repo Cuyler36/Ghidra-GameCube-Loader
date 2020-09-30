@@ -2,17 +2,13 @@ package gamecubeloader.dol;
 
 import java.io.FileNotFoundException;
 import java.io.FileReader;
-import java.math.BigInteger;
-
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
 import gamecubeloader.common.SystemMemorySections;
 import gamecubeloader.common.SymbolLoader;
-import gamecubeloader.dol.DOLHeader;
 import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.program.model.address.AddressSpace;
-import ghidra.program.model.listing.ContextChangeException;
 import ghidra.program.model.listing.Program;
 import ghidra.util.Msg;
 import ghidra.util.filechooser.ExtensionFileFilter;

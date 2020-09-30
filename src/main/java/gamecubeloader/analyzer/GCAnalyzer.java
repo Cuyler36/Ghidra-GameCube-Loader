@@ -6,7 +6,6 @@ import gamecubeloader.GameCubeLoader;
 import ghidra.app.cmd.register.SetRegisterCmd;
 import ghidra.app.services.AbstractAnalyzer;
 import ghidra.app.services.AnalyzerType;
-import ghidra.app.util.Option;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.framework.cmd.CompoundCmd;
 import ghidra.framework.options.OptionType;
