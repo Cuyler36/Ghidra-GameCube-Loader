@@ -166,7 +166,7 @@ public class GameCubeLoader extends BinaryLoader {
 	    	boolean specifyFileMemAddresses = OptionUtils.getBooleanOptionValue(SPECIFY_BINARY_MEM_ADDRESSES, options, false);
 	    	
 	        if (this.binaryType == BinaryType.DOL) {
-	        	new DOLProgramBuilder(dolHeader, provider, program, monitor, autoLoadMaps, createDefaultSections);
+	        	new DOLProgramBuilder(dolHeader, provider, program, monitor, autoLoadMaps, createDefaultSections, messageLog);
 	        }
 	        else if (this.binaryType == BinaryType.REL) {
 	        	try {
@@ -178,13 +178,13 @@ public class GameCubeLoader extends BinaryLoader {
 	        		}
 	        		
 					new RELProgramBuilder(relHeader, provider, program, monitor, file,
-							autoLoadMaps, saveRelocations, createDefaultSections, specifyFileMemAddresses);
+							autoLoadMaps, saveRelocations, createDefaultSections, specifyFileMemAddresses, messageLog);
 				} catch (AddressOverflowException | AddressOutOfBoundsException | MemoryAccessException e ) {
 					e.printStackTrace();
 				}
 	        }
 	        else {
-	        	new ApploaderProgramBuilder(apploaderHeader, provider, program, monitor, createDefaultSections);
+	        	new ApploaderProgramBuilder(apploaderHeader, provider, program, monitor, createDefaultSections, messageLog);
 	        }
         	return true;
     	}

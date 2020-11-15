@@ -20,6 +20,7 @@ import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.bin.RandomAccessByteProvider;
+import ghidra.app.util.importer.MessageLog;
 import ghidra.program.model.address.AddressOutOfBoundsException;
 import ghidra.program.model.address.AddressOverflowException;
 import ghidra.program.model.address.AddressSpace;
@@ -40,6 +41,7 @@ public class RELProgramBuilder  {
 	private AddressSpace addressSpace;
 	private Program program;
 	private TaskMonitor monitor;
+	private MessageLog log;
 	private boolean autoloadMaps = false;
 	private boolean saveRelocations = false;
 	private boolean specifyModuleMemAddrs = false;
@@ -111,11 +113,12 @@ public class RELProgramBuilder  {
 	
 	public RELProgramBuilder(RELHeader rel, ByteProvider provider, Program program,
 			TaskMonitor monitor, File originalFile, boolean autoloadMaps, boolean saveRelocations,
-			boolean createDefaultMemSections, boolean specifyModuleMemAddrs)
+			boolean createDefaultMemSections, boolean specifyModuleMemAddrs, MessageLog log)
 					throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException {
 		this.rel = rel;
 		this.program = program;
 		this.monitor = monitor;
+		this.log = log;
 		this.autoloadMaps = autoloadMaps;
 		this.saveRelocations = saveRelocations;
 		this.specifyModuleMemAddrs = specifyModuleMemAddrs;
@@ -124,7 +127,7 @@ public class RELProgramBuilder  {
 		
 		this.load(provider, originalFile);
 		if (createDefaultMemSections) {
-			SystemMemorySections.Create(program);
+			SystemMemorySections.Create(program, log);
 		}
 	}
 	
@@ -192,7 +195,7 @@ public class RELProgramBuilder  {
 		// If a DOL file exists, load it first.
 		if (this.dol != null) {
 			new DOLProgramBuilder(this.dol, this.dolReader.getByteProvider(), this.program, this.monitor,
-					this.autoloadMaps, false);
+					this.autoloadMaps, false, log);
 			currentOutputAddress = align(this.dol.memoryEndAddress, 0x20);
 		}
 		

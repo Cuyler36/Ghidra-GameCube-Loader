@@ -8,6 +8,7 @@ import gamecubeloader.common.SystemMemorySections;
 import gamecubeloader.common.SymbolLoader;
 import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.bin.ByteProvider;
+import ghidra.app.util.importer.MessageLog;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
 import ghidra.util.Msg;
@@ -24,7 +25,8 @@ public final class DOLProgramBuilder {
 	private String binaryName;
 	
 	public DOLProgramBuilder(DOLHeader dol, ByteProvider provider, Program program,
-			TaskMonitor monitor, boolean autoloadMaps, boolean createDefaultMemSections) {
+			TaskMonitor monitor, boolean autoloadMaps, boolean createDefaultMemSections,
+			MessageLog log) {
 		this.dol = dol;
 		this.program = program;
 		this.autoloadMaps = autoloadMaps;
@@ -32,7 +34,7 @@ public final class DOLProgramBuilder {
 		
 		this.load(monitor, provider);
 		if (createDefaultMemSections) {
-			SystemMemorySections.Create(program);
+			SystemMemorySections.Create(program, log);
 		}
 	}
 	

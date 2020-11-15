@@ -3,6 +3,7 @@ package gamecubeloader.apploader;
 import gamecubeloader.common.SystemMemorySections;
 import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.bin.ByteProvider;
+import ghidra.app.util.importer.MessageLog;
 import ghidra.program.model.address.AddressOutOfBoundsException;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
@@ -17,7 +18,7 @@ public final class ApploaderProgramBuilder {
 	private TaskMonitor monitor;
 	
 	public ApploaderProgramBuilder(ApploaderHeader header, ByteProvider provider, Program program,
-			TaskMonitor monitor, boolean createSystemMemSections)
+			TaskMonitor monitor, boolean createSystemMemSections, MessageLog log)
 					throws AddressOutOfBoundsException {
 		this.header = header;
 		
@@ -26,7 +27,7 @@ public final class ApploaderProgramBuilder {
 		
 		this.load(provider);
 		if (createSystemMemSections) {
-			SystemMemorySections.Create(program);
+			SystemMemorySections.Create(program, log);
 		}
 	}
 	

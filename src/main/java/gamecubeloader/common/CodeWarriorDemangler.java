@@ -5,13 +5,12 @@ import ghidra.app.util.demangler.DemangledDataType;
 import ghidra.app.util.demangler.DemangledException;
 import ghidra.app.util.demangler.DemangledFunction;
 import ghidra.app.util.demangler.DemangledFunctionPointer;
-import ghidra.app.util.demangler.DemangledMethod;
 import ghidra.app.util.demangler.DemangledObject;
 import ghidra.app.util.demangler.DemangledTemplate;
 import ghidra.app.util.demangler.DemangledType;
 import ghidra.app.util.demangler.DemangledVariable;
 import ghidra.app.util.demangler.Demangler;
-import ghidra.app.util.demangler.DemanglerUtil;
+import ghidra.app.util.demangler.DemanglerOptions;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.util.TypeMismatchException;
 
@@ -128,8 +127,7 @@ public final class CodeWarriorDemangler implements Demangler {
 
         var isConstFunc = demangler.isConstFunc();
         if (isConstFunc || demangler.hasFunction()) {
-            var d = demangler.nextFunction(parentClass);
-            d.setOriginalMangled(symbolName);
+            var d = demangler.nextFunction(parentClass, symbolName);
 
             if (isThunk)
                 d.setThunk(true);
@@ -150,8 +148,6 @@ public final class CodeWarriorDemangler implements Demangler {
     
                 CodeWarriorDemangler.demangleTemplates(d);
             }
-
-            d.setOriginalMangled(symbolName);
             
             if (demangler.containsInvalidSpecifier)
                 return null;
@@ -161,8 +157,8 @@ public final class CodeWarriorDemangler implements Demangler {
         
         // It could be a member or vtable
         if (demangler.isEmpty()) {
-            var member = new DemangledVariable(symbolName.substring(0, firstDunder));
-            member.setOriginalMangled(symbolName);
+            var name = symbolName.substring(0, firstDunder);
+            var member = new DemangledVariable(symbolName, name, name);
             
             if (parentClass != null) {
                 var namespace = parentClass.getNamespace();
@@ -170,7 +166,7 @@ public final class CodeWarriorDemangler implements Demangler {
                 // If the class has a namespace, include that as well.
                 if (parentClass.getTemplate() != null)
                     className += parentClass.getTemplate().toTemplate();
-                var classNamespace = new DemangledType(className);
+                var classNamespace = new DemangledType(null, className, className);
                 classNamespace.setNamespace(namespace);
                 member.setNamespace(classNamespace);
             }
@@ -181,17 +177,11 @@ public final class CodeWarriorDemangler implements Demangler {
         return null;
     }
 
-    public DemangledFunction nextFunction(DemangledDataType parentClass) {
+    public DemangledFunction nextFunction(DemangledDataType parentClass, String mangledName) {
         char tok = tk();
 
-        DemangledFunction func;
-        if (parentClass != null) {
-            func = new DemangledMethod(null);
-            func.setCallingConvention("__thiscall");
-        } else {
-            func = new DemangledFunction(null);
-            func.setCallingConvention("__stdcall");
-        }
+        DemangledFunction func = new DemangledFunction(mangledName, null, null);
+        func.setCallingConvention(parentClass != null ? "__thiscall" : "__stdcall");
 
         if (tok == 'C') {
             func.setTrailingConst();
@@ -222,7 +212,7 @@ public final class CodeWarriorDemangler implements Demangler {
             // If the class has a namespace, include that as well.
             if (parentClass.getTemplate() != null)
                 className += parentClass.getTemplate().toTemplate();
-            var classNamespace = new DemangledType(className);
+            var classNamespace = new DemangledType(null, className, className);
             classNamespace.setNamespace(namespace);
             func.setNamespace(classNamespace);
         }
@@ -238,10 +228,11 @@ public final class CodeWarriorDemangler implements Demangler {
             int value = nextInteger(tok);
             if (hd() == '>' || hd() == ',') {
                 // Literal integer (template)
-                return new DemangledDataType("" + value);
+                return new DemangledDataType(null, "" + value, "" + value);
             }
             // Name.
-            var d = new DemangledDataType(cw(value));
+            String val = cw(value);
+            var d = new DemangledDataType(null, val, val);
             demangleTemplates(d);
             return d;
         } else if (tok == 'Q') {
@@ -254,12 +245,23 @@ public final class CodeWarriorDemangler implements Demangler {
                 names.add(cw(length));
             }
 
-            var d = new DemangledDataType(names.get(compCount - 1));
+            var val = names.get(compCount - 1);
+            var d = new DemangledDataType(null, val, val);
             demangleTemplates(d);
-            d.setNamespace(DemanglerUtil.convertToNamespaces(names.subList(0, names.size() - 1)));
+            
+            // Create namespaces
+            DemangledType namespaceType = new DemangledType(null, names.get(0), names.get(0)); // Top level
+            for (String ns : names.subList(1, names.size() - 1))
+            {
+                DemangledType subNamespace = new DemangledType(null, ns, ns);
+                subNamespace.setNamespace(namespaceType);
+                namespaceType = subNamespace;
+            }
+            
+            d.setNamespace(namespaceType);
             return d;
         } else if (tok == 'F') {
-            var func = new DemangledFunctionPointer();
+            var func = new DemangledFunctionPointer(null, null);
 
             // Parse parameters.
             while (true) {
@@ -314,31 +316,31 @@ public final class CodeWarriorDemangler implements Demangler {
             d.setMemberScope(scope);
             return d;
         } else if (tok == 'i') {
-            return new DemangledDataType(DemangledDataType.INT);
+            return new DemangledDataType(null, DemangledDataType.INT, DemangledDataType.INT);
         } else if (tok == 'l') {
-            return new DemangledDataType(DemangledDataType.LONG);
+            return new DemangledDataType(null, DemangledDataType.LONG, DemangledDataType.LONG);
         } else if (tok == 'x') {
-            return new DemangledDataType(DemangledDataType.LONG_LONG);
+            return new DemangledDataType(null, DemangledDataType.LONG_LONG, DemangledDataType.LONG_LONG);
         } else if (tok == 'b') {
-            return new DemangledDataType(DemangledDataType.BOOL);
+            return new DemangledDataType(null, DemangledDataType.BOOL, DemangledDataType.BOOL);
         } else if (tok == 'c') {
-            return new DemangledDataType(DemangledDataType.CHAR);
+            return new DemangledDataType(null, DemangledDataType.CHAR, DemangledDataType.CHAR);
         } else if (tok == 's') {
-            return new DemangledDataType(DemangledDataType.SHORT);
+            return new DemangledDataType(null, DemangledDataType.SHORT, DemangledDataType.SHORT);
         } else if (tok == 'f') {
-            return new DemangledDataType(DemangledDataType.FLOAT);
+            return new DemangledDataType(null, DemangledDataType.FLOAT, DemangledDataType.FLOAT);
         } else if (tok == 'd') {
-            return new DemangledDataType(DemangledDataType.DOUBLE);
+            return new DemangledDataType(null, DemangledDataType.DOUBLE, DemangledDataType.DOUBLE);
         } else if (tok == 'w') {
-            return new DemangledDataType(DemangledDataType.WCHAR_T);
+            return new DemangledDataType(null, DemangledDataType.WCHAR_T, DemangledDataType.WCHAR_T);
         } else if (tok == 'v') {
-            return new DemangledDataType(DemangledDataType.VOID);
+            return new DemangledDataType(null, DemangledDataType.VOID, DemangledDataType.VOID);
         } else if (tok == 'e') {
-            return new DemangledDataType(DemangledDataType.VARARGS);
+            return new DemangledDataType(null, DemangledDataType.VARARGS, DemangledDataType.VARARGS);
         } else {
             // Unknown.
             this.containsInvalidSpecifier = this.containsInvalidSpecifier || tok != '_'; // This is here in case the __ is preceded by more underscores.
-            return new DemangledDataType(DemangledDataType.UNDEFINED);
+            return new DemangledDataType(null, DemangledDataType.UNDEFINED, DemangledDataType.UNDEFINED);
         }
     }
 
@@ -448,5 +450,12 @@ public final class CodeWarriorDemangler implements Demangler {
     @Override
     public DemangledObject demangle(String mangled, boolean demangleOnlyKnownPatterns) throws DemangledException {
         return CodeWarriorDemangler.demangleSymbol(mangled);
+    }
+
+    @Override
+    public DemangledObject demangle(String mangled, DemanglerOptions options)
+        throws DemangledException {
+        // TODO Auto-generated method stub
+        return null;
     }   
 }
