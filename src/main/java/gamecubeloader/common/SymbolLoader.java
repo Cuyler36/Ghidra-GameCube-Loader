@@ -376,7 +376,7 @@ public class SymbolLoader {
 				}
 				
 				return memoryBlock.getName();
-			} catch (DuplicateNameException | LockException e) {
+			} catch (LockException e) {
 				e.printStackTrace();
 				return memoryBlock.getName();
 			}

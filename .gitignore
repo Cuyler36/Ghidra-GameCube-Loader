@@ -34,3 +34,5 @@ hs_err_pid*
 
 # Allow gradle wrapper jar
 !gradle/wrapper/gradle-wrapper.jar
+.uuid
+.repo
