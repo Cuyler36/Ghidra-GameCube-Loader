@@ -46,11 +46,19 @@ public class GCAnalyzer extends AbstractAnalyzer {
 
     @Override
     public boolean getDefaultEnablement(Program program) {
-        return true;
+        if (program.getLanguageID().getIdAsString().equals("PowerPC:BE:32:Gekko_Broadway") &&
+                program.getExecutableFormat().equals(GameCubeLoader.BIN_NAME)) {
+            return true;
+        }
+
+        return false;
     }
     
     @Override
     public boolean canAnalyze(Program program) {
+        if (program.getLanguageID().getIdAsString().equals("PowerPC:BE:32:Gekko_Broadway")) {
+            return true;
+        }
         return program.getExecutableFormat().equals(GameCubeLoader.BIN_NAME);
     }
     
