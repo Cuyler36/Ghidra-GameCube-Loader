@@ -45,7 +45,7 @@ def getGitHash = {
 }
 
 wrapper {
-	gradleVersion = '5.0'
+    gradleVersion = '7.1'
     distributionType = Wrapper.DistributionType.BIN
 }
 
@@ -58,12 +58,12 @@ configurations {
 }
 
 dependencies {
-    compile fileTree(dir: ghidraInstallDir + '/Ghidra/Processors', include: "**/*.jar")
+    implementation fileTree(dir: ghidraInstallDir + '/Ghidra/Processors', include: "**/*.jar")
     localDeps group: 'org.lz4', name: 'lz4-java', version: '1.5.1'
-    compile configurations.localDeps
+    implementation configurations.localDeps
 }
 
-task buildExtension (type: Zip, overwrite: true) {
+buildExtension {
     baseName "${project.name}-${project.version}-${getGitHash()}-Ghidra_${ghidra_version}".replace(' ', '_')
     extension 'zip'
     destinationDir DISTRIBUTION_DIR
