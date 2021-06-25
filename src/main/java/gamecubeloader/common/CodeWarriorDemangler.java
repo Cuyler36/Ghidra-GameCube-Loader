@@ -448,14 +448,13 @@ public final class CodeWarriorDemangler implements Demangler {
     }
 
     @Override
+    @SuppressWarnings("removal")
     public DemangledObject demangle(String mangled, boolean demangleOnlyKnownPatterns) throws DemangledException {
         return CodeWarriorDemangler.demangleSymbol(mangled);
     }
 
     @Override
-    public DemangledObject demangle(String mangled, DemanglerOptions options)
-        throws DemangledException {
-        // TODO Auto-generated method stub
-        return null;
-    }   
+    public DemangledObject demangle(String mangled, DemanglerOptions options) throws DemangledException {
+        return CodeWarriorDemangler.demangleSymbol(mangled);
+    }
 }
