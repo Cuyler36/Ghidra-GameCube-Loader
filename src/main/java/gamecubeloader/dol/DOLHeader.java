@@ -165,7 +165,7 @@ public class DOLHeader {
 			return false;
 		}
 		
-		if (this.entryPoint < 0x80000000L || this.entryPoint > 0x817FFFFFL) {
+		if ((this.entryPoint < 0x80000000L || this.entryPoint > 0x817FFFFFL) && this.entryPoint != 0x00003400) {
 			return false;
 		}
 		
