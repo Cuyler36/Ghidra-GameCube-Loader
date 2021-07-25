@@ -7,10 +7,6 @@ Includes optional symbol map importing, automatic namespace creation, and demang
 * DOL Executables (.dol)
 * Relocatable Modules (.rel)
 
-## Dependencies
-This loader requires the Gekko/Broadway processor definitions for Ghidra. These must be installed prior to using the loaders.
-https://github.com/aldelaro5/ghidra-gekko-broadway-lang
-
 ## Building
 - Ensure you have ``JAVA_HOME`` set to the path of your JDK 11 installation.
 - Set ``GHIDRA_INSTALL_DIR`` to your Ghidra install directory. This can be done in one of the following ways:
