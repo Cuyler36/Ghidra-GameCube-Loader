@@ -14,12 +14,15 @@ import ghidra.app.util.demangler.DemanglerOptions;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.util.TypeMismatchException;
 
-public final class CodeWarriorDemangler implements Demangler {    
-    public final String CODEWARRIOR_DEMANGLE_PROP = "DemangleCW";
+public final class CodeWarriorDemangler implements Demangler {
+    public final String CODEWARRIOR_DEMANGLE_PROP = "DemangleCW"; /* When defined, forces CodeWarrior demangling on all symbols. */
+    public final String CODEWARRIOR_NO_DEMANGLE_PROP = "NoDemangleCW"; /* When defined, prevents CodeWarrior demangling on all symbols. */
     
     public String str;
     public boolean containsInvalidSpecifier;
 
+    public CodeWarriorDemangler() { } /* Empty constructor for DemanglerCmd::applyTo */
+    
     public CodeWarriorDemangler(String g) {
         this.str = g;
     }
@@ -440,7 +443,10 @@ public final class CodeWarriorDemangler implements Demangler {
     @Override
     public boolean canDemangle(Program program) {
         try {
-            return program.getUsrPropertyManager().getVoidPropertyMap(CODEWARRIOR_DEMANGLE_PROP) != null;
+            final boolean canDemangle = (program.getLanguageID().getIdAsString().equals("PowerPC:BE:32:Gekko_Broadway") ||
+                program.getUsrPropertyManager().getVoidPropertyMap(CODEWARRIOR_DEMANGLE_PROP) != null) &&
+                program.getUsrPropertyManager().getVoidPropertyMap(CODEWARRIOR_NO_DEMANGLE_PROP) == null;
+            return canDemangle;
         }
         catch (TypeMismatchException e) {
             return false;
