@@ -23,8 +23,10 @@ import gamecubeloader.apploader.ApploaderProgramBuilder;
 import gamecubeloader.common.Yaz0;
 import gamecubeloader.dol.DOLHeader;
 import gamecubeloader.dol.DOLProgramBuilder;
+import gamecubeloader.ramdump.RAMDumpProgramBuilder;
 import gamecubeloader.rel.RELHeader;
 import gamecubeloader.rel.RELProgramBuilder;
+import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.Option;
 import ghidra.app.util.OptionUtils;
 import ghidra.app.util.bin.BinaryReader;
@@ -53,8 +55,10 @@ public class GameCubeLoader extends BinaryLoader {
     public static final String BIN_NAME = "Nintendo GameCube Binary";
     
 	private static enum BinaryType {
-		DOL, REL, APPLOADER, UNKNOWN
+		DOL, REL, APPLOADER, RAMDUMP, UNKNOWN
 	}
+	
+	private static final int RAM_MEM1_SIZE = 0x01800000;
 	
 	private static final String ADD_RESERVED_AND_HARDWAREREGISTERS = "Create OS global memory section & hardware register memory sections";
 	private static final String AUTOLOAD_MAPS_OPTION_NAME = "Automatically load symbol map files with corresponding names";
@@ -90,29 +94,40 @@ public class GameCubeLoader extends BinaryLoader {
 			// Attempt to determine the binary type based off of the info in it.
 			BinaryReader reader = new BinaryReader(provider, false);
 			
-			
-			// Check for DOL first.
-			DOLHeader tempDolHeader = new DOLHeader(reader); 
-			if (tempDolHeader.CheckHeaderIsValid()) {
-				binaryType = BinaryType.DOL;
-				dolHeader = tempDolHeader;
-			}
-			else {
-				// Check for REL.
-				RELHeader tempRelHeader = new RELHeader(reader);
-				if (tempRelHeader.IsValid(reader)) {
-					binaryType = BinaryType.REL;
-					relHeader = tempRelHeader;
-				}
-				else {
-					// Check for Apploader.
-					ApploaderHeader tempAppHeader = new ApploaderHeader(reader);
-					if (tempAppHeader.IsValid()) {
-						binaryType = BinaryType.APPLOADER;
-						apploaderHeader = tempAppHeader;
-					}
-				}
-			}
+			/* Check for RAM dump. */
+            if (provider.length() == GameCubeLoader.RAM_MEM1_SIZE) {
+                /* Determine if GC or Wii */
+                long magic0 = reader.readUnsignedInt(0x18); /* 0x5D1C9EA3 for Wii. */
+                long magic1 = reader.readUnsignedInt(0x1C); /* 0xC2339F3D for GC. */
+                /* TODO: Are there better checks for this? */
+                if (magic0 == 0x5D1C9EA3 || magic1 == 0xC2339F3D) {
+                    binaryType = BinaryType.RAMDUMP;
+                }
+            }
+            else {
+    			/* Check for DOL executable. */
+    			DOLHeader tempDolHeader = new DOLHeader(reader); 
+    			if (tempDolHeader.CheckHeaderIsValid()) {
+    				binaryType = BinaryType.DOL;
+    				dolHeader = tempDolHeader;
+    			}
+    			else {
+    				/* Check for REL module. */
+    				RELHeader tempRelHeader = new RELHeader(reader);
+    				if (tempRelHeader.IsValid(reader)) {
+    					binaryType = BinaryType.REL;
+    					relHeader = tempRelHeader;
+    				}
+    				else {
+    					/* Check if it's an apploader. */
+    					ApploaderHeader tempAppHeader = new ApploaderHeader(reader);
+    					if (tempAppHeader.IsValid()) {
+    						binaryType = BinaryType.APPLOADER;
+    						apploaderHeader = tempAppHeader;
+    					}
+    				}
+    			}
+            }
 		}
 		
 		if (binaryType != null) {
@@ -165,7 +180,10 @@ public class GameCubeLoader extends BinaryLoader {
 	    	boolean createDefaultSections = OptionUtils.getBooleanOptionValue(ADD_RESERVED_AND_HARDWAREREGISTERS, options, true);
 	    	boolean specifyFileMemAddresses = OptionUtils.getBooleanOptionValue(SPECIFY_BINARY_MEM_ADDRESSES, options, false);
 	    	
-	        if (this.binaryType == BinaryType.DOL) {
+	    	if (this.binaryType == BinaryType.RAMDUMP) {
+	    	    new RAMDumpProgramBuilder(provider, program, monitor, createDefaultSections, messageLog);
+	    	}
+	    	else if (this.binaryType == BinaryType.DOL) {
 	        	new DOLProgramBuilder(dolHeader, provider, program, monitor, autoLoadMaps, createDefaultSections, messageLog);
 	        }
 	        else if (this.binaryType == BinaryType.REL) {

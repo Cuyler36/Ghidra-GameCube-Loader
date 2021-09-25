@@ -27,7 +27,7 @@ public final class ApploaderProgramBuilder {
 		
 		this.load(provider);
 		if (createSystemMemSections) {
-			SystemMemorySections.Create(program, log);
+			SystemMemorySections.Create(provider, program, monitor, log);
 		}
 	}
 	

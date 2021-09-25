@@ -1,15 +1,31 @@
 package gamecubeloader.common;
 
 import ghidra.app.util.MemoryBlockUtils;
+import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.program.model.listing.Program;
+import ghidra.util.task.TaskMonitor;
 
 public final class SystemMemorySections {
-	public static void Create(Program program, MessageLog log) {
+	public static void Create(ByteProvider provider, Program program, TaskMonitor monitor, MessageLog log) {
 		var addressSpace = program.getAddressFactory().getDefaultAddressSpace();
 		
-		// Create globals section first
-		MemoryBlockUtils.createUninitializedBlock(program, false, "OSGlobals", addressSpace.getAddress(0x80000000), 0x3100, "Operating System Globals", null, true, true, false, log);
+		/* Create OS globals section. Check if we have the data, otherwise create uninitialized block. */
+		if (program.getMinAddress().compareTo(addressSpace.getAddress(0x80000000L)) <= 0) {
+		    /* We have all the OS globals data, likely from a RAM dump. */
+		    try {
+                MemoryBlockUtils.createInitializedBlock(program, true, "OSGlobals", addressSpace.getAddress(0x80000000), provider.getInputStream(0),
+                        0x3100, "", null, true, true, true, null, monitor);
+            }
+            catch (Exception e) {
+                e.printStackTrace();
+            }
+		}
+		else {
+		    /* Only mark as overlay if any part of the data already exists. */
+		    final boolean overlay = program.getMinAddress().compareTo(addressSpace.getAddress(0x80003100)) < 0;
+		    MemoryBlockUtils.createUninitializedBlock(program, overlay, "OSGlobals", addressSpace.getAddress(0x80000000), 0x3100, "Operating System Globals", null, true, true, false, log);
+		}
 		
 		// Now create hardware registers
 		var cp = MemoryBlockUtils.createUninitializedBlock(program, false, "CP", addressSpace.getAddress(0xCC000000), 0x80, "Command Processor Register", null, true, true, false, log);

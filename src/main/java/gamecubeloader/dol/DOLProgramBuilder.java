@@ -34,7 +34,7 @@ public final class DOLProgramBuilder {
 		
 		this.load(monitor, provider);
 		if (createDefaultMemSections) {
-			SystemMemorySections.Create(program, log);
+			SystemMemorySections.Create(provider, program, monitor, log);
 		}
 	}
 	
