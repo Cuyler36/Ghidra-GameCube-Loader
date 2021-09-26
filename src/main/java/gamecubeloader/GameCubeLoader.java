@@ -51,7 +51,7 @@ import ghidra.util.task.TaskMonitor;
  * TODO: Provide class-level documentation that describes what this loader does.
  */
 public class GameCubeLoader extends BinaryLoader {
-    public static final String BIN_NAME = "Nintendo GameCube Binary";
+    public static final String BIN_NAME = "Nintendo GameCube/Wii Binary";
     
 	private static enum BinaryType {
 		DOL, REL, APPLOADER, RAMDUMP, UNKNOWN
@@ -71,7 +71,18 @@ public class GameCubeLoader extends BinaryLoader {
 	
 	@Override
 	public String getName() {
-		return BIN_NAME;
+	    switch (this.binaryType) {
+	        case DOL:
+	            return BIN_NAME + " (Executable)";
+	        case REL:
+	            return BIN_NAME + " (Relocatable Module)";
+	        case APPLOADER:
+	            return BIN_NAME + " (Apploader)";
+	        case RAMDUMP:
+	            return BIN_NAME + " (RAM Dump)";
+	        default:
+	            return BIN_NAME;
+	    }
 	}
 
 	@Override
