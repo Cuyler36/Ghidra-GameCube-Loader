@@ -26,7 +26,6 @@ import gamecubeloader.dol.DOLProgramBuilder;
 import gamecubeloader.ramdump.RAMDumpProgramBuilder;
 import gamecubeloader.rel.RELHeader;
 import gamecubeloader.rel.RELProgramBuilder;
-import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.Option;
 import ghidra.app.util.OptionUtils;
 import ghidra.app.util.bin.BinaryReader;
@@ -100,7 +99,7 @@ public class GameCubeLoader extends BinaryLoader {
                 long magic0 = reader.readUnsignedInt(0x18); /* 0x5D1C9EA3 for Wii. */
                 long magic1 = reader.readUnsignedInt(0x1C); /* 0xC2339F3D for GC. */
                 /* TODO: Are there better checks for this? */
-                if (magic0 == 0x5D1C9EA3 || magic1 == 0xC2339F3D) {
+                if (magic0 == 0x5D1C9EA3L || magic1 == 0xC2339F3DL) {
                     binaryType = BinaryType.RAMDUMP;
                 }
             }

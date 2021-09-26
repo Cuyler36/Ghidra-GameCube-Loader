@@ -108,7 +108,7 @@ public final class DOLProgramBuilder {
 					
 					if (reader != null) {
 						SymbolLoader loader = new SymbolLoader(this.program, monitor, reader, dol.textSectionMemoryAddresses[0], 32, dol.bssMemoryAddress,
-							this.binaryName);
+							this.binaryName, true);
 						loader.ApplySymbols();
 					}
 				}

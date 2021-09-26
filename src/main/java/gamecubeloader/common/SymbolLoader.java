@@ -44,10 +44,11 @@ public class SymbolLoader {
 	private long objectAddress = 0;
 	private int alignment;
 	private long bssAddress;
+	private boolean renameMemoryBlocks = false;
 	private String binaryName;
 	
 	public SymbolLoader(Program program, TaskMonitor monitor, FileReader reader, long objectAddress, int alignment, long bssAddress,
-			String binaryName) {
+			String binaryName, boolean renameMemoryBlocks) {
 		this.program = program;
 		this.monitor = monitor;
 		this.addressSpace = program.getAddressFactory().getDefaultAddressSpace();
@@ -55,7 +56,7 @@ public class SymbolLoader {
 		this.objectAddress = objectAddress;
 		this.alignment = alignment;
 		this.bssAddress = bssAddress;
-		
+		this.renameMemoryBlocks = renameMemoryBlocks;
 		this.binaryName = binaryName;
 	}
 	
@@ -172,7 +173,9 @@ public class SymbolLoader {
 						}
 						
 						// Try to rename the memory block.
-						this.TryRenameMemoryBlocks(currentSectionInfo, effectiveAddress);
+						if (this.renameMemoryBlocks) { 
+						    this.TryRenameMemoryBlocks(currentSectionInfo, effectiveAddress);
+						}
 					}
 					else {
 						Msg.warn(this, "Symbol Loader: No memory layout information was found for section: " + sectionName);
@@ -253,6 +256,7 @@ public class SymbolLoader {
 	    symbols = new ArrayList<SymbolInfo>();
         long effectiveAddress = this.objectAddress;
         long preBssAddress = -1;
+        String currentSectionName = null;
         SymbolInfo currentSymbolInfo = null;
         
         for (int i = 0; i < lines.length; i++) {
@@ -261,6 +265,7 @@ public class SymbolLoader {
             
             if (line.contains(" section layout")) {
                 String sectionName = line.substring(0, line.indexOf(" section layout")).trim();
+                currentSectionName = sectionName;
                 Msg.info(this, "Symbol Loader: Switched to symbols for section: " + sectionName);
                 
                 // Since we don't have any Memory Map info, use the section alignment passed in & the current end address.
@@ -284,7 +289,9 @@ public class SymbolLoader {
                 }
                 
                 // Try to rename the memory block.
-                this.TryRenameMemoryBlocks(new MemoryMapSectionInfo(sectionName, effectiveAddress, 0, 0), effectiveAddress);
+                if (this.renameMemoryBlocks) { 
+                    this.TryRenameMemoryBlocks(new MemoryMapSectionInfo(sectionName, effectiveAddress, 0, 0), effectiveAddress);
+                }
                 
                 if (i + 1 < lines.length && lines[i + 1].trim().startsWith("Starting")) {
                     i += 3; // Skip past the section column data.
@@ -343,7 +350,10 @@ public class SymbolLoader {
                         size, virtualAddress, objectAlignment, isSubEntry);
                 }
                 
-                symbols.add(symbolInfo);
+                /* Don't add the symbol if it's equal to the section name. These are usually BLObs. */
+                if (!symbolInfo.name.equals(currentSectionName)) {
+                    symbols.add(symbolInfo);
+                }
                 currentSymbolInfo = symbolInfo;
             }
         }
@@ -501,7 +511,7 @@ public class SymbolLoader {
 				
 				// If it's a function, create it.
 				var block = this.program.getMemory().getBlock(symbolAddress);
-				if (symbolInfo.size > 3 && block != null && block.isExecute()) {
+				if (symbolInfo.size > 3 && block != null && block.isExecute() && !block.getName().equals("RAM")) {
 					var addressSet = new AddressSet(symbolAddress, this.addressSpace.getAddress(symbolInfo.virtualAddress + symbolInfo.size - 1));
 					try {
     					this.program.getFunctionManager().createFunction(demangledName, objectNamespace == null ? globalNamespace : objectNamespace,
@@ -550,7 +560,7 @@ public class SymbolLoader {
 					return new LoadMapResult(false, null);
 				}
 			
-				var loader = new SymbolLoader(program, monitor, fileReader, objectAddress, alignment, bssAddress, binaryName);
+				var loader = new SymbolLoader(program, monitor, fileReader, objectAddress, alignment, bssAddress, binaryName, true);
 				return new LoadMapResult(true, loader.ApplySymbols());
 			}
 		}

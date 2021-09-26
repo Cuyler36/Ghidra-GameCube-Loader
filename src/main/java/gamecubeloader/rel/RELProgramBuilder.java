@@ -330,7 +330,7 @@ public class RELProgramBuilder  {
 						var reader = new FileReader(selectedFile);
 						var loader = new SymbolLoader(this.program, monitor, reader, relBaseAddress, 0,
 								relInfo.header.bssSectionId != 0 ? relInfo.header.sections[relInfo.header.bssSectionId].address : 0,
-								this.binaryName);
+								this.binaryName, true);
 						this.symbolInfoList.add(loader.ApplySymbols());
 					}
 				}
