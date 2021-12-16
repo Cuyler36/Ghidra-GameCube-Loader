@@ -6,6 +6,8 @@ Includes optional symbol map importing, automatic namespace creation, and demang
 ## Supported Formats
 * DOL Executables (.dol)
 * Relocatable Modules (.rel)
+* Apploaders
+* RAM Dumps
 
 ## Building
 - Ensure you have ``JAVA_HOME`` set to the path of your JDK 11 installation.
