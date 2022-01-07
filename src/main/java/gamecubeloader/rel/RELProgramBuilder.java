@@ -3,6 +3,7 @@ package gamecubeloader.rel;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.nio.file.AccessMode;
 import java.util.*;
 
 import org.apache.commons.io.FilenameUtils;
@@ -19,7 +20,7 @@ import gamecubeloader.dol.DOLProgramBuilder;
 import ghidra.app.util.MemoryBlockUtils;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
-import ghidra.app.util.bin.RandomAccessByteProvider;
+import ghidra.app.util.bin.FileByteProvider;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.program.model.address.AddressOutOfBoundsException;
 import ghidra.program.model.address.AddressOverflowException;
@@ -147,7 +148,7 @@ public class RELProgramBuilder  {
 			if (fileName == originalFile.getName()) continue;
 			
 			if (this.dol == null && fileName.endsWith(".dol")) {
-				var dolProvider = new RandomAccessByteProvider(files[i]);
+				var dolProvider = new FileByteProvider(files[i], null, AccessMode.READ);
 				var dol_reader = new BinaryReader(dolProvider, false);
 				var dolHeader = new DOLHeader(dol_reader);
 				
@@ -157,7 +158,7 @@ public class RELProgramBuilder  {
 				}
 			}
 			else if (fileName.endsWith(".rel") || fileName.endsWith(".szs") || fileName.endsWith(".yaz0")) {
-				ByteProvider relProvider = new RandomAccessByteProvider(files[i]);
+				ByteProvider relProvider = new FileByteProvider(files[i], null, AccessMode.READ);
 				var relReader = new BinaryReader(relProvider, false);
 				
 				var yaz0 = new Yaz0();
