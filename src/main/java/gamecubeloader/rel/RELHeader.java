@@ -2,22 +2,11 @@ package gamecubeloader.rel;
 
 import java.io.IOException;
 
+import gamecubeloader.common.SectionInfo;
 import ghidra.app.util.bin.BinaryReader;
 import ghidra.util.Msg;
 
 public class RELHeader {
-	private static final int SECTION_INFO_SIZE = 8;
-	
-	public class SectionInfo {
-		public long address;
-		public long size;
-		
-		public SectionInfo(long address, long size) {
-			this.address = address;
-			this.size = size;
-		}
-	}
-	
 	public long moduleId;
 	public long previousModuleAddress;
 	public long nextModuleAddress;
@@ -108,7 +97,7 @@ public class RELHeader {
 	public boolean IsValid(BinaryReader reader) {
 		try {
 			long fileSize = reader.length();
-			
+
 			// Check section info is valid first.
 			if (this.sectionTableOffset > fileSize) {
 				Msg.error(this, "Unable to load REL file! Reason: Section Info Table address is past file bounds!");
@@ -126,7 +115,7 @@ public class RELHeader {
 				return false;
 			}
 			
-			long sectionTableSize = this.sectionCount * RELHeader.SECTION_INFO_SIZE;
+			long sectionTableSize = this.sectionCount * SectionInfo.SECTION_INFO_SIZE;
 			
 			// Get the first section address by file address.
 			long firstSectionInFileAddress = -1;

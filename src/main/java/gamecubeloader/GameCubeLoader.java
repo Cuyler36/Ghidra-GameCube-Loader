@@ -26,6 +26,8 @@ import gamecubeloader.dol.DOLProgramBuilder;
 import gamecubeloader.ramdump.RAMDumpProgramBuilder;
 import gamecubeloader.rel.RELHeader;
 import gamecubeloader.rel.RELProgramBuilder;
+import gamecubeloader.rso.RSOHeader;
+import gamecubeloader.rso.RSOProgramBuilder;
 import ghidra.app.util.Option;
 import ghidra.app.util.OptionUtils;
 import ghidra.app.util.bin.BinaryReader;
@@ -37,13 +39,11 @@ import ghidra.app.util.opinion.Loader;
 import ghidra.framework.model.DomainFolder;
 import ghidra.framework.model.DomainObject;
 import ghidra.program.model.address.Address;
-import ghidra.program.model.address.AddressOutOfBoundsException;
-import ghidra.program.model.address.AddressOverflowException;
 import ghidra.program.model.lang.CompilerSpec;
 import ghidra.program.model.lang.Language;
 import ghidra.program.model.lang.LanguageCompilerSpecPair;
 import ghidra.program.model.listing.Program;
-import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.util.Msg;
 import ghidra.util.exception.CancelledException;
 import ghidra.util.task.TaskMonitor;
 
@@ -54,7 +54,7 @@ public class GameCubeLoader extends BinaryLoader {
     public static final String BIN_NAME = "Nintendo GameCube/Wii Binary";
     
 	private static enum BinaryType {
-		DOL, REL, APPLOADER, RAMDUMP, UNKNOWN
+		DOL, REL, RSO, APPLOADER, RAMDUMP, UNKNOWN
 	}
 	
 	private static final int RAM_MEM1_SIZE = 0x01800000;
@@ -67,6 +67,7 @@ public class GameCubeLoader extends BinaryLoader {
 	private BinaryType binaryType = BinaryType.UNKNOWN;
 	private DOLHeader dolHeader;
 	private RELHeader relHeader;
+	private RSOHeader rsoHeader;
 	private ApploaderHeader apploaderHeader;
 	
 	@Override
@@ -76,6 +77,8 @@ public class GameCubeLoader extends BinaryLoader {
 	            return BIN_NAME + " (Executable)";
 	        case REL:
 	            return BIN_NAME + " (Relocatable Module)";
+			case RSO:
+				return BIN_NAME + " (RSO Module)";
 	        case APPLOADER:
 	            return BIN_NAME + " (Apploader)";
 	        case RAMDUMP:
@@ -129,12 +132,19 @@ public class GameCubeLoader extends BinaryLoader {
     					relHeader = tempRelHeader;
     				}
     				else {
-    					/* Check if it's an apploader. */
-    					ApploaderHeader tempAppHeader = new ApploaderHeader(reader);
-    					if (tempAppHeader.IsValid()) {
-    						binaryType = BinaryType.APPLOADER;
-    						apploaderHeader = tempAppHeader;
-    					}
+    					/* Check for RSO module.*/
+						RSOHeader tempRsoHeader = new RSOHeader(reader);
+						if (tempRsoHeader.IsValid(reader)) {
+							binaryType = BinaryType.RSO;
+							rsoHeader = tempRsoHeader;
+						} else {
+							/* Check if it's an apploader. */
+							ApploaderHeader tempAppHeader = new ApploaderHeader(reader);
+							if (tempAppHeader.IsValid()) {
+								binaryType = BinaryType.APPLOADER;
+								apploaderHeader = tempAppHeader;
+							}
+						}
     				}
     			}
             }
@@ -181,8 +191,7 @@ public class GameCubeLoader extends BinaryLoader {
 	
     @Override
     protected boolean loadProgramInto(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
-            MessageLog messageLog, Program program, TaskMonitor monitor) 
-            throws IOException {
+            MessageLog messageLog, Program program, TaskMonitor monitor) {
     	
     	if (this.binaryType != BinaryType.UNKNOWN) {
 	    	boolean autoLoadMaps = OptionUtils.getBooleanOptionValue(AUTOLOAD_MAPS_OPTION_NAME, options, true);
@@ -207,10 +216,17 @@ public class GameCubeLoader extends BinaryLoader {
 	        		
 					new RELProgramBuilder(relHeader, provider, program, monitor, file,
 							autoLoadMaps, saveRelocations, createDefaultSections, specifyFileMemAddresses, messageLog);
-				} catch (AddressOverflowException | AddressOutOfBoundsException | MemoryAccessException e ) {
-					e.printStackTrace();
+				} catch (Exception e) {
+					Msg.error(this, "Error Occurred", e);
 				}
 	        }
+	        else if (this.binaryType == BinaryType.RSO) {
+	        	try {
+					new RSOProgramBuilder(rsoHeader, provider, program, monitor, messageLog);
+				} catch (Exception e) {
+					Msg.error(this, "Error Occurred", e);
+				}
+			}
 	        else {
 	        	new ApploaderProgramBuilder(apploaderHeader, provider, program, monitor, createDefaultSections, messageLog);
 	        }
