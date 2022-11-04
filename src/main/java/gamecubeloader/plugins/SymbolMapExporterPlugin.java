@@ -64,7 +64,7 @@ public class SymbolMapExporterPlugin extends ProgramPlugin implements ChangeList
     private DockingAction chooseAction;
 
     public SymbolMapExporterPlugin(PluginTool tool) {
-        super(tool, true, true);
+        super(tool);
     }
 
     @Override

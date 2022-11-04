@@ -16,7 +16,6 @@ import ghidra.program.model.address.Address;
 import ghidra.program.model.address.AddressSetView;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.data.DataType;
-import ghidra.program.model.data.DataTypeConflictException;
 import ghidra.program.model.data.DoubleDataType;
 import ghidra.program.model.data.FloatDataType;
 import ghidra.program.model.data.Undefined1DataType;
@@ -278,9 +277,6 @@ public class GCAnalyzer extends AbstractAnalyzer {
                 program.getListing().createData(address, dt);
             }
             catch (CodeUnitInsertionException e) {
-                // ignore
-            }
-            catch (DataTypeConflictException e) {
                 // ignore
             }
         }
