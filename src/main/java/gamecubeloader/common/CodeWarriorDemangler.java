@@ -12,7 +12,7 @@ import ghidra.app.util.demangler.DemangledVariable;
 import ghidra.app.util.demangler.Demangler;
 import ghidra.app.util.demangler.DemanglerOptions;
 import ghidra.program.model.listing.Program;
-import ghidra.program.model.util.TypeMismatchException;
+import ghidra.util.map.TypeMismatchException;
 
 public final class CodeWarriorDemangler implements Demangler {
     public final String CODEWARRIOR_DEMANGLE_PROP = "DemangleCW"; /* When defined, forces CodeWarrior demangling on all symbols. */

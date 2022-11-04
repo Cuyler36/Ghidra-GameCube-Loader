@@ -158,7 +158,7 @@ public class GameCubeLoader extends BinaryLoader {
 	}
 
 	@Override
-	protected List<Program> loadProgram(ByteProvider provider, String programName,
+	protected List<LoadedProgram> loadProgram(ByteProvider provider, String programName,
 			DomainFolder programFolder, LoadSpec loadSpec, List<Option> options, MessageLog log,
 			Object consumer, TaskMonitor monitor)
 			throws IOException, CancelledException {
@@ -181,9 +181,9 @@ public class GameCubeLoader extends BinaryLoader {
 			}
 		}
 		
-		List<Program> results = new ArrayList<Program>();
+		List<LoadedProgram> results = new ArrayList<>();
 		if (program != null) {
-			results.add(program);
+			results.add(new LoadedProgram(program, programFolder));
 		}
 		
 		return results;
