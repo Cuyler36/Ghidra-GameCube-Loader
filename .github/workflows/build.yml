@@ -2,10 +2,6 @@ name: Run Gradle on PRs
 on:
   pull_request:
   push:
-    branches:
-    - master
-    - main
-    tags: '*'
 jobs:
   gradle:
     runs-on: ubuntu-latest
@@ -15,8 +11,6 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
-    - name: Setup Gradle
-      uses: gradle/gradle-build-action@v2
     - name: Install Ghidra
       run: |
         curl -L "$GHIDRA_URL" -o ghidra.zip
@@ -24,11 +18,11 @@ jobs:
         unzip ghidra.zip -d ~/ghidra
         rm ghidra.zip
       env:
-        GHIDRA_URL: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_10.1.5_build/ghidra_10.1.5_PUBLIC_20220726.zip
+        GHIDRA_URL: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_10.2.2_build/ghidra_10.2.2_PUBLIC_20221115.zip
     - name: Execute Gradle build
-      run: gradle
+      run: ./gradlew
       env:
-        GHIDRA_INSTALL_DIR: /home/runner/ghidra/ghidra_10.1.5_PUBLIC/
+        GHIDRA_INSTALL_DIR: /home/runner/ghidra/ghidra_10.2.2_PUBLIC/
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
