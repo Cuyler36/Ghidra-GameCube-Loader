@@ -46,19 +46,19 @@ public final class SystemMemorySections {
 		var dsp = MemoryBlockUtils.createUninitializedBlock(program, false, "DSP", addressSpace.getAddress(0xCC005000), 0x200, "Digital Signal Processor Register", null, true, true, false, log);
 		dsp.setVolatile(true);
 		
-		var di = MemoryBlockUtils.createUninitializedBlock(program, false, "DI", addressSpace.getAddress(0xCC006000), 0x40, "DVD Interface Reigster", null, true, true, false, log);
+		var di = MemoryBlockUtils.createUninitializedBlock(program, false, "DI", addressSpace.getAddress(0xCC006000), 0x40, "DVD Interface Register", null, true, true, false, log);
 		di.setVolatile(true);
 		
-		var si = MemoryBlockUtils.createUninitializedBlock(program, false, "SI", addressSpace.getAddress(0xCC006400), 0x100, "Serial Interface Reigster", null, true, true, false, log);
+		var si = MemoryBlockUtils.createUninitializedBlock(program, false, "SI", addressSpace.getAddress(0xCC006400), 0x100, "Serial Interface Register", null, true, true, false, log);
 		si.setVolatile(true);
 		
-		var exi = MemoryBlockUtils.createUninitializedBlock(program, false, "EXI", addressSpace.getAddress(0xCC006800), 0x40, "External Interface Reigster", null, true, true, false, log);
+		var exi = MemoryBlockUtils.createUninitializedBlock(program, false, "EXI", addressSpace.getAddress(0xCC006800), 0x40, "External Interface Register", null, true, true, false, log);
 		exi.setVolatile(true);
 		
-		var ai = MemoryBlockUtils.createUninitializedBlock(program, false, "AI", addressSpace.getAddress(0xCC006C00), 0x40, "Audio Interface Reigster", null, true, true, false, log);
+		var ai = MemoryBlockUtils.createUninitializedBlock(program, false, "AI", addressSpace.getAddress(0xCC006C00), 0x40, "Audio Interface Register", null, true, true, false, log);
 		ai.setVolatile(true);
 		
-		var gxfifo = MemoryBlockUtils.createUninitializedBlock(program, false, "GXFIFO", addressSpace.getAddress(0xCC008000), 0x8, "Graphics FIFO Reigster", null, true, true, false, log);
+		var gxfifo = MemoryBlockUtils.createUninitializedBlock(program, false, "GXFIFO", addressSpace.getAddress(0xCC008000), 0x8, "Graphics FIFO Register", null, true, true, false, log);
 		gxfifo.setVolatile(true);
 	}
 }
