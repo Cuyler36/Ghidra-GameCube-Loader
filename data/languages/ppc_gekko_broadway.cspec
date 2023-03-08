@@ -32,6 +32,21 @@
         <pentry minsize="4" maxsize="8" metatype="float" extension="float">
           <register name="f8"/>
         </pentry>
+        <pentry minsize="4" maxsize="8" metatype="float" extension="float">
+          <register name="f9"/>
+        </pentry>
+        <pentry minsize="4" maxsize="8" metatype="float" extension="float">
+          <register name="f10"/>
+        </pentry>
+        <pentry minsize="4" maxsize="8" metatype="float" extension="float">
+          <register name="f11"/>
+        </pentry>
+        <pentry minsize="4" maxsize="8" metatype="float" extension="float">
+          <register name="f12"/>
+        </pentry>
+        <pentry minsize="4" maxsize="8" metatype="float" extension="float">
+          <register name="f13"/>
+        </pentry>
         <pentry minsize="1" maxsize="4">
           <register name="r3"/>
         </pentry>
@@ -72,8 +87,9 @@
         </pentry>
       </output>
       <unaffected>
-        <register name="r2"/>
-        <register name="r13"/>
+        <register name="r1"/>  <!-- stack pointer -->
+        <register name="r2"/>  <!-- _SDA2_BASE_ -->
+      	<register name="r13"/> <!-- _SDA_BASE_  -->
         <register name="r14"/>
         <register name="r15"/>
         <register name="r16"/>
@@ -92,7 +108,8 @@
         <register name="r29"/>
         <register name="r30"/>
         <register name="r31"/>
-        <register name="r1"/>
+        <register name="cr2"/>
+        <register name="cr3"/>
         <register name="cr4"/>
       </unaffected>
     </prototype>
