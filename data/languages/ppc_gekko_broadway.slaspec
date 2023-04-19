@@ -795,11 +795,6 @@ define pcodeop TLBWrite;
 define pcodeop WriteExternalEnable;
 define pcodeop WriteExternalEnableImmediate;
 
-# Paired singles specific operations (they are too complex
-# to implement them as is)
-define pcodeop dequantize;
-define pcodeop quantize;
-
 ################################################################
 # Macros
 ################################################################
@@ -1158,209 +1153,152 @@ CRM_CR:	cr0		is CRM=128 & cr0	{tmp:4 = zext(cr0) << 28;export tmp;}
 # Paired singles quantized load and store instructions
 ################################################################
 
-define pcodeop __psq_l0;
-define pcodeop __psq_l1;
-:psq_l fD,dPlusRaOrZeroAddressPS,W,I is OP=56 & fD & A & W & I & dPlusRaOrZeroAddressPS & ps0D & ps1D
-{
-	EA:4 = dPlusRaOrZeroAddressPS;
-	wFlag:1 = W;
-	ps0D = __psq_l0(EA, I);
-	if (wFlag == 1) goto <wIsOne>;
-	ps1D = __psq_l1(EA, I);
-	goto inst_next;
-	<wIsOne>
+define pcodeop ldexpf;
+
+macro load_ps(ps0D, ps1D, EA, W, I) {
+	lt:1 = 0;
+	ls:1 = 0;
+	wFlag:1 = 0;
+	lt[0,3] = I[16,3];
+	ls[0,3] = I[24,6];
+	wFlag = W;
 	one:1 = 1;
 	floatOne:4 = int2float(one);
+
+	local scale;
+	if (ls == 0) goto <noscale>;
+	scale = ldexpf(-ls);
+	goto <continue_scale>;
+	<noscale>
+	scale = floatOne;
+
+	<continue_scale>
+
+	if (lt == 4 || lt == 6) goto <int8>;
+	if (lt == 5 || lt == 7) goto <int16>;
+	goto <float>;
+
+	<int8>
+	local x81 = *:1(EA);
+	local x82 = *:1(EA + 1);
+	ps0D = scale * int2float(x81);
+	if (wFlag) goto <int8w1>;
+	ps1D = scale * int2float(x82);
+	goto inst_next;
+	<int8w1>
 	ps1D = floatOne;
+	goto inst_next;
+
+	<int16>
+	local x61 = *:2(EA);
+	local x62 = *:2(EA + 2);
+	ps0D = scale * int2float(x61);
+	if (wFlag) goto <int16w1>;
+	ps1D = scale * int2float(x62);
+	goto inst_next;
+	<int16w1>
+	ps1D = floatOne;
+	goto inst_next;
+
+	<float>
+	ps0D = *:4(EA);
+	if (wFlag) goto <floatw1>;
+	ps1D = *:4(EA + 4);
+	goto inst_next;
+	<floatw1>
+	ps1D = floatOne;
+}
+
+:psq_l fD,dPlusRaOrZeroAddressPS,W,I is OP=56 & fD & W & I & dPlusRaOrZeroAddressPS & ps0D & ps1D
+{
+	EA:4 = dPlusRaOrZeroAddressPS;
+	load_ps(ps0D, ps1D, EA, W, I);
 }
 
 :psq_lu fD,dPlusRaAddressPS,W,I is OP=57 & fD & A & W & I & dPlusRaAddressPS & ps0D & ps1D
 {
 	EA:4 = dPlusRaAddressPS;
 	A = EA;
-	wFlag:1 = W;
-	type:1 = 0;
-	scale:1 = 0;
-	type[0,3] = I[16,3];
-	scale[0,3] = I[24,6];
-	if (type == 4 || type == 6) goto <int8>;
-	if (type == 5 || type == 7) goto <int16>;
-	goto <none>;
-	<int8>
-	ps0D = dequantize(EA, type, scale);
-	if (wFlag == 1) goto <wIsOne>;
-	ps1D = dequantize(EA + 1, type, scale);
-	goto inst_next;
-	<int16>
-	ps0D = dequantize(EA, type, scale);
-	if (wFlag == 1) goto <wIsOne>;
-	ps1D = dequantize(EA + 2, type, scale);
-	goto inst_next;
-	<none>
-	ps0D = *:4(EA);
-	ps1D = *:4(EA + 4);
-	if (wFlag == 0) goto inst_next;
-	<wIsOne>
-	one:1 = 1;
-	floatOne:4 = int2float(one);
-	ps1D = floatOne;
+	load_ps(ps0D, ps1D, EA, W, I);
 }
 
 :psq_lux fD,RA_OR_ZERO,B,WX,IX is OP=4 & fD & RA_OR_ZERO & A & B & WX & IX & XOP_1_6=38 & BIT_0=0 & ps0D & ps1D
 {
 	EA:4 = RA_OR_ZERO + B;
 	A = EA;
-	wFlag:1 = WX;
-	type:1 = 0;
-	scale:1 = 0;
-	type[0,3] = IX[16,3];
-	scale[0,3] = IX[24,6];
-	if (type == 4 || type == 6) goto <int8>;
-	if (type == 5 || type == 7) goto <int16>;
-	goto <none>;
-	<int8>
-	ps0D = dequantize(EA, type, scale);
-	if (wFlag == 1) goto <wIsOne>;
-	ps1D = dequantize(EA + 1, type, scale);
-	goto inst_next;
-	<int16>
-	ps0D = dequantize(EA, type, scale);
-	if (wFlag == 1) goto <wIsOne>;
-	ps1D = dequantize(EA + 2, type, scale);
-	goto inst_next;
-	<none>
-	ps0D = *:4(EA);
-	ps1D = *:4(EA + 4);
-	if (wFlag == 0) goto inst_next;
-	<wIsOne>
-	one:1 = 1;
-	floatOne:4 = int2float(one);
-	ps1D = floatOne;
+	load_ps(ps0D, ps1D, EA, WX, IX);
 }
 
 :psq_lx fD,RA_OR_ZERO,B,WX,IX is OP=4 & fD & RA_OR_ZERO & B & WX & IX & XOP_1_6=6 & BIT_0=0 & ps0D & ps1D
 {
 	EA:4 = RA_OR_ZERO + B;
-	wFlag:1 = WX;
-	type:1 = 0;
-	scale:1 = 0;
-	type[0,3] = IX[16,3];
-	scale[0,3] = IX[24,6];
-	if (type == 4 || type == 6) goto <int8>;
-	if (type == 5 || type == 7) goto <int16>;
-	goto <none>;
-	<int8>
-	ps0D = dequantize(EA, type, scale);
-	if (wFlag == 1) goto <wIsOne>;
-	ps1D = dequantize(EA + 1, type, scale);
-	goto inst_next;
-	<int16>
-	ps0D = dequantize(EA, type, scale);
-	if (wFlag == 1) goto <wIsOne>;
-	ps1D = dequantize(EA + 2, type, scale);
-	goto inst_next;
-	<none>
-	ps0D = *:4(EA);
-	ps1D = *:4(EA + 4);
-	if (wFlag == 0) goto inst_next;
-	<wIsOne>
-	one:1 = 1;
-	floatOne:4 = int2float(one);
-	ps1D = floatOne;
+	load_ps(ps0D, ps1D, EA, WX, IX);
 }
 
-define pcodeop __psq_st0;
-define pcodeop __psq_st1;
+macro store_ps(ps0S, ps1S, EA, W, I) {
+	lt:1 = 0;
+	ls:1 = 0;
+	lt[0,3] = I[0,3];
+	ls[0,3] = I[8,6];
+	wFlag:1 = W;
+
+	local scale;
+	if (ls == 0) goto <noscale>;
+	scale = ldexpf(ls);
+	goto <continue_scale>;
+	<noscale>
+	one:1 = 1;
+	floatOne:4 = int2float(one);
+	scale = floatOne;
+
+	<continue_scale>
+
+	if (lt == 4 || lt == 6) goto <int8>;
+	if (lt == 5 || lt == 7) goto <int16>;
+	goto <float>;
+
+	<int8>
+	*:1(EA) = trunc(scale f* ps0S);
+	if (wFlag == 1) goto inst_next;
+	*:1(EA + 1) = trunc(scale f* ps1S);
+	goto inst_next;
+
+	<int16>
+	*:2(EA) = trunc(scale f* ps0S);
+	if (wFlag == 1) goto inst_next;
+	*:2(EA + 2) = trunc(scale f* ps1S);
+	goto inst_next;
+
+	<float>
+	*:4(EA) = ps0S;
+	if (wFlag == 1) goto inst_next;
+	*:4(EA + 4) = ps1S;
+}
+
 :psq_st fS,dPlusRaOrZeroAddressPS,W,I is OP=60 & fS & A & W & I & dPlusRaOrZeroAddressPS & ps0S & ps1S
 {
 	EA:4 = dPlusRaOrZeroAddressPS;
-	wFlag:1 = W;
-	__psq_st0(EA, ps0S, I);
-	if (wFlag == 1) goto inst_next;
-	__psq_st1(EA, ps1S, I);
+	store_ps(ps0S, ps1S, EA, W, I);
 }
 
 :psq_stu fS,dPlusRaAddressPS,W,I is OP=61 & fS & A & W & I & dPlusRaAddressPS & ps0S & ps1S
 {
 	EA:4 = dPlusRaAddressPS;
 	A = EA;
-	wFlag:1 = W;
-	type:1 = 0;
-	scale:1 = 0;
-	type[0,3] = I[0,3];
-	scale[0,3] = I[8,6];
-	if (type == 4 || type == 6) goto <int8>;
-	if (type == 5 || type == 7) goto <int16>;
-	goto <none>;
-	<int8>
-	*:1(EA) = quantize(ps0S, type, scale);
-	if (wFlag == 1) goto inst_next;
-	*:1(EA + 1) = quantize(ps1S, type, scale);
-	goto inst_next;
-	<int16>
-	*:2(EA) = quantize(ps0S, type, scale);
-	if (wFlag == 1) goto inst_next;
-	*:2(EA + 2) = quantize(ps1S, type, scale);
-	goto inst_next;
-	<none>
-	*:4(EA) = ps0S;
-	if (wFlag == 1) goto inst_next;
-	*:4(EA + 4) = ps1S;
+	store_ps(ps0S, ps1S, EA, W, I);
 }
 
 :psq_stux fS,RA_OR_ZERO,B,WX,IX is OP=4 & fS & RA_OR_ZERO & A & B & WX & IX & XOP_1_6=39 & BIT_0=0 & ps0S & ps1S
 {
 	EA:4 = RA_OR_ZERO + B;
 	A = EA;
-	wFlag:1 = WX;
-	type:1 = 0;
-	scale:1 = 0;
-	type[0,3] = IX[0,3];
-	scale[0,3] = IX[8,6];
-	if (type == 4 || type == 6) goto <int8>;
-	if (type == 5 || type == 7) goto <int16>;
-	goto <none>;
-	<int8>
-	*:1(EA) = quantize(ps0S, type, scale);
-	if (wFlag == 1) goto inst_next;
-	*:1(EA + 1) = quantize(ps1S, type, scale);
-	goto inst_next;
-	<int16>
-	*:2(EA) = quantize(ps0S, type, scale);
-	if (wFlag == 1) goto inst_next;
-	*:2(EA + 2) = quantize(ps1S, type, scale);
-	goto inst_next;
-	<none>
-	*:4(EA) = ps0S;
-	if (wFlag == 1) goto inst_next;
-	*:4(EA + 4) = ps1S;
+	store_ps(ps0S, ps1S, EA, WX, IX);
 }
 
 :psq_stx fS,RA_OR_ZERO,B,WX,IX is OP=4 & fS & RA_OR_ZERO & B & WX & IX & XOP_1_6=7 & BIT_0=0 & ps0S & ps1S
 {
 	EA:4 = RA_OR_ZERO + B;
-	wFlag:1 = WX;
-	type:1 = 0;
-	scale:1 = 0;
-	type[0,3] = IX[0,3];
-	scale[0,3] = IX[8,6];
-	if (type == 4 || type == 6) goto <int8>;
-	if (type == 5 || type == 7) goto <int16>;
-	goto <none>;
-	<int8>
-	*:1(EA) = quantize(ps0S, type, scale);
-	if (wFlag == 1) goto inst_next;
-	*:1(EA + 1) = quantize(ps1S, type, scale);
-	goto inst_next;
-	<int16>
-	*:2(EA) = quantize(ps0S, type, scale);
-	if (wFlag == 1) goto inst_next;
-	*:2(EA + 2) = quantize(ps1S, type, scale);
-	goto inst_next;
-	<none>
-	*:4(EA) = ps0S;
-	if (wFlag == 1) goto inst_next;
-	*:4(EA + 4) = ps1S;
+	store_ps(ps0S, ps1S, EA, WX, IX);
 }
 
 ################################################################
