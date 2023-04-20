@@ -130,12 +130,13 @@ define register offset=0x4000 size=8 [
 	f0  f1  f2  f3  f4  f5  f6  f7  f8  f9  f10 f11 f12 f13 f14 f15
 	f16 f17 f18 f19 f20 f21 f22 f23 f24 f25 f26 f27 f28 f29 f30 f31 ];
 
-# Paired singles registers
-define register offset=0x4000 size=4 [
-	 ps0_0  ps0_1  ps1_0  ps1_1  ps2_0  ps2_1  ps3_0  ps3_1  ps4_0  ps4_1  ps5_0  ps5_1  ps6_0  ps6_1  ps7_0  ps7_1
-	 ps8_0  ps8_1  ps9_0  ps9_1 ps10_0 ps10_1 ps11_0 ps11_1 ps12_0 ps12_1 ps13_0 ps13_1 ps14_0 ps14_1 ps15_0 ps15_1
-	ps16_0 ps16_1 ps17_0 ps17_1 ps18_0 ps18_1 ps19_0 ps19_1 ps20_0 ps20_1 ps21_0 ps21_1 ps22_0 ps22_1 ps23_0 ps23_1
-	ps24_0 ps24_1 ps25_0 ps25_1 ps26_0 ps26_1 ps27_0 ps27_1 ps28_0 ps28_1 ps29_0 ps29_1 ps30_0 ps30_1 ps31_0 ps31_1 ];
+# ps1 registers
+# Note: in gekko and broadway those are actually 32-bit, but use the same size as ps0 for definition convenience and noisy casts in decompilation.
+define register offset=0x5000 size=8 [
+         ps0_1 ps1_1  ps2_1  ps3_1  ps4_1  ps5_1  ps6_1  ps7_1
+         ps8_1 ps9_1  ps10_1 ps11_1 ps12_1 ps13_1 ps14_1 ps15_1
+        ps16_1 ps17_1 ps18_1 ps19_1 ps20_1 ps21_1 ps22_1 ps23_1
+        ps24_1 ps25_1 ps26_1 ps27_1 ps28_1 ps29_1 ps30_1 ps31_1];
 
 # Define context bits
 define register offset=0x6000 size=4   contextreg;
@@ -392,6 +393,9 @@ define token instr(32)
 	ps0S=(21,25)
 	ps1S=(21,25)
 	fT=(21,25)
+
+	# Hack to set ps1 in single fp instruction
+	ps1T=(21,25)
   I=(12,14)
   IX=(7,9)
 	IMM=(11,15)
@@ -577,12 +581,12 @@ attach variables [ fD fB fA fC fS fT ]
 
 # Paired singles (individual components)
 attach variables [ ps0D ps0B ps0A ps0C ps0S ]
-                 [  ps0_0  ps1_0  ps2_0  ps3_0  ps4_0  ps5_0  ps6_0  ps7_0
-                    ps8_0  ps9_0 ps10_0 ps11_0 ps12_0 ps13_0 ps14_0 ps15_0
-                   ps16_0 ps17_0 ps18_0 ps19_0 ps20_0 ps21_0 ps22_0 ps23_0
-                   ps24_0 ps25_0 ps26_0 ps27_0 ps28_0 ps29_0 ps30_0 ps31_0 ];
+                 [ f0  f1  f2  f3  f4  f5  f6  f7
+                   f8  f9  f10 f11 f12 f13 f14 f15
+                   f16 f17 f18 f19 f20 f21 f22 f23
+                   f24 f25 f26 f27 f28 f29 f30 f31 ];
 
-attach variables [ ps1D ps1B ps1A ps1C ps1S ]
+attach variables [ ps1D ps1B ps1A ps1C ps1S ps1T ]
                  [  ps0_1  ps1_1  ps2_1  ps3_1  ps4_1  ps5_1  ps6_1  ps7_1
                     ps8_1  ps9_1 ps10_1 ps11_1 ps12_1 ps13_1 ps14_1 ps15_1
                    ps16_1 ps17_1 ps18_1 ps19_1 ps20_1 ps21_1 ps22_1 ps23_1
@@ -1163,7 +1167,7 @@ macro load_ps(ps0D, ps1D, EA, W, I) {
 	ls[0,3] = I[24,6];
 	wFlag = W;
 	one:1 = 1;
-	floatOne:4 = int2float(one);
+	floatOne:8 = int2float(one);
 
 	local scale;
 	if (ls == 0) goto <noscale>;
@@ -1201,9 +1205,9 @@ macro load_ps(ps0D, ps1D, EA, W, I) {
 	goto inst_next;
 
 	<float>
-	ps0D = *:4(EA);
+	ps0D = float2float(*:4(EA));
 	if (wFlag) goto <floatw1>;
-	ps1D = *:4(EA + 4);
+	ps1D = float2float(*:4(EA + 4));
 	goto inst_next;
 	<floatw1>
 	ps1D = floatOne;
@@ -1248,7 +1252,7 @@ macro store_ps(ps0S, ps1S, EA, W, I) {
 	goto <continue_scale>;
 	<noscale>
 	one:1 = 1;
-	floatOne:4 = int2float(one);
+	floatOne:8 = int2float(one);
 	scale = floatOne;
 
 	<continue_scale>
@@ -1270,9 +1274,9 @@ macro store_ps(ps0S, ps1S, EA, W, I) {
 	goto inst_next;
 
 	<float>
-	*:4(EA) = ps0S;
+	*:4(EA) = float2float(ps0S);
 	if (wFlag == 1) goto inst_next;
-	*:4(EA + 4) = ps1S;
+	*:4(EA + 4) = float2float(ps1S);
 }
 
 :psq_st fS,dPlusRaOrZeroAddressPS,W,I is OP=60 & fS & A & W & I & dPlusRaOrZeroAddressPS & ps0S & ps1S
@@ -1386,75 +1390,75 @@ macro store_ps(ps0S, ps1S, EA, W, I) {
 
 :ps_madd fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=29 & Rc=0 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	ps0D = tmp1 f+ ps0B;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0A) | nan(ps0C) | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	ps1D = tmp2 f+ ps1B;
 }
 
 :ps_madd. fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=29 & Rc=1 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	ps0D = tmp1 f+ ps0B;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0A) | nan(ps0C) | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	ps1D = tmp2 f+ ps1B;
 	cr1flags();
 }
 
 :ps_madds0 fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=14 & Rc=0 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	ps0D = tmp1 f+ ps0B;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0A) | nan(ps0C) | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps0C;
+	tmp2:8 = ps1A f* ps0C;
 	ps1D = tmp2 f+ ps1B;
 }
 
 :ps_madds0. fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=14 & Rc=1 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	ps0D = tmp1 f+ ps0B;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0A) | nan(ps0C) | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps0C;
+	tmp2:8 = ps1A f* ps0C;
 	ps1D = tmp2 f+ ps1B;
 	cr1flags();
 }
 
 :ps_madds1 fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=15 & Rc=0 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps1C;
+	tmp1:8 = ps0A f* ps1C;
 	ps0D = tmp1 f+ ps0B;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0A) | nan(ps1C) | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	ps1D = tmp2 f+ ps1B;
 }
 
 :ps_madds1. fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=15 & Rc=1 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps1C;
+	tmp1:8 = ps0A f* ps1C;
 	ps0D = tmp1 f+ ps0B;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0A) | nan(ps1C) | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	ps1D = tmp2 f+ ps1B;
 	cr1flags();
 }
@@ -1526,25 +1530,25 @@ macro store_ps(ps0S, ps1S, EA, W, I) {
 
 :ps_msub fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=28 & Rc=0 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	ps0D = tmp1 f- ps0B;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(fA) | nan(fC) | nan(fB);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	ps1D = tmp2 f- ps1B;
 }
 
 :ps_msub. fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=28 & Rc=1 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	ps0D = tmp1 f- ps0B;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(fA) | nan(fC) | nan(fB);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	ps1D = tmp2 f- ps1B;
 	cr1flags();
 }
@@ -1622,28 +1626,28 @@ macro store_ps(ps0S, ps1S, EA, W, I) {
 
 :ps_nmadd fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=31 & Rc=0 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	tmp1 = tmp1 f+ ps0B;
 	ps0D = f- tmp1;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0A) | nan(ps0C) | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	tmp2 = tmp2 f+ ps1B;
 	ps1D = f- tmp2;
 }
 
 :ps_nmadd. fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=31 & Rc=1 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	tmp1 = tmp1 f+ ps0B;
 	ps0D = f- tmp1;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0A) | nan(ps0C) | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	tmp2 = tmp2 f+ ps1B;
 	ps1D = f- tmp2;
 	cr1flags();
@@ -1651,28 +1655,28 @@ macro store_ps(ps0S, ps1S, EA, W, I) {
 
 :ps_nmsub fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=30 & Rc=0 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	tmp1 = tmp1 f- ps0B;
 	ps0D = f- tmp1;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(fA) | nan(fC) | nan(fB);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	tmp2 = tmp2 f- ps1B;
 	ps1D = f- tmp2;
 }
 
 :ps_nmsub. fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=30 & Rc=1 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	tmp1:4 = ps0A f* ps0C;
+	tmp1:8 = ps0A f* ps0C;
 	tmp1 = tmp1 f- ps0B;
 	ps0D = f- tmp1;
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(fA) | nan(fC) | nan(fB);
 	setSummaryFPSCR();
-	tmp2:4 = ps1A f* ps1C;
+	tmp2:8 = ps1A f* ps1C;
 	tmp2 = tmp2 f- ps1B;
 	ps1D = f- tmp2;
 	cr1flags();
@@ -1680,66 +1684,66 @@ macro store_ps(ps0S, ps1S, EA, W, I) {
 
 :ps_res fD,fB is OP=4 & fD & BITS_16_20=0 & fB & BITS_6_10=0 & XOP_1_5=24 & Rc=0 & ps0D & ps1D & ps0B & ps1B
 {
-	one:4 = 1;
-	floatOne:4 = int2float(one);
-	tmp1:4 = float2float(floatOne f/ ps0B);
+	one:8 = 1;
+	floatOne:8 = int2float(one);
+	tmp1:8 = float2float(floatOne f/ ps0B);
 	ps0D = float2float(tmp1);
 	setFPRF(fD);
 	fp_zx = fp_zx | (fB f== 0);
 	fp_vxsnan = fp_vxsnan | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = float2float(floatOne f/ ps1B);
+	tmp2:8 = float2float(floatOne f/ ps1B);
 	ps1D = float2float(tmp2);
 }
 
 :ps_res. fD,fB is OP=4 & fD & BITS_16_20=0 & fB & BITS_6_10=0 & XOP_1_5=24 & Rc=1 & ps0D & ps1D & ps0B & ps1B
 {
-	one:4 = 1;
-	floatOne:4 = int2float(one);
-	tmp1:4 = float2float(floatOne f/ ps0B);
+	one:8 = 1;
+	floatOne:8 = int2float(one);
+	tmp1:8 = float2float(floatOne f/ ps0B);
 	ps0D = float2float(tmp1);
 	setFPRF(fD);
 	fp_zx = fp_zx | (fB f== 0);
 	fp_vxsnan = fp_vxsnan | nan(ps0B);
 	setSummaryFPSCR();
-	tmp2:4 = float2float(floatOne f/ ps1B);
+	tmp2:8 = float2float(floatOne f/ ps1B);
 	ps1D = float2float(tmp2);
 	cr1flags();
 }
 
 :ps_rsqrte fD,fB is OP=4 & fD & BITS_16_20=0 & fB & BITS_6_10=0 & XOP_1_5=26 & Rc=0 & ps0D & ps1D & ps0B & ps1B
 {
-	one:4 = 1;
-	floatOne:4 = int2float(one);
-	tmpSqrt1:4 = sqrt(ps0B);
+	one:8 = 1;
+	floatOne:8 = int2float(one);
+	tmpSqrt1:8 = sqrt(ps0B);
 	ps0D = (floatOne f/ tmpSqrt1);
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0B);
 	setSummaryFPSCR();
-	tmpSqrt2:4 = sqrt(ps1B);
+	tmpSqrt2:8 = sqrt(ps1B);
 	ps1D = (floatOne f/ tmpSqrt2);
 }
 
 :ps_rsqrte. fD,fB is OP=4 & fD & BITS_16_20=0 & fB & BITS_6_10=0 & XOP_1_5=26 & Rc=1 & ps0D & ps1D & ps0B & ps1B
 {
-	one:4 = 1;
-	floatOne:4 = int2float(one);
-	tmpSqrt1:4 = sqrt(ps0B);
+	one:8 = 1;
+	floatOne:8 = int2float(one);
+	tmpSqrt1:8 = sqrt(ps0B);
 	ps0D = (floatOne f/ tmpSqrt1);
 	setFPRF(ps0D);
 	fp_xx = fp_xx | fp_fi;
 	fp_vxsnan = fp_vxsnan | nan(ps0B);
 	setSummaryFPSCR();
-	tmpSqrt2:4 = sqrt(ps1B);
+	tmpSqrt2:8 = sqrt(ps1B);
 	ps1D = (floatOne f/ tmpSqrt2);
 	cr1flags();
 }
 
 :ps_sel fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=23 & Rc=0 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	zero:4 = 0;
-	zeroFloat:4 = int2float(zero);
+	zero:8 = 0;
+	zeroFloat:8 = int2float(zero);
 	ps0D = ps0C;
 	if (ps0A f>= zeroFloat) goto <ps1test>; 
 	ps0D = ps0B;
@@ -1751,8 +1755,8 @@ macro store_ps(ps0S, ps1S, EA, W, I) {
 
 :ps_sel. fD,fA,fC,fB is OP=4 & fD & fA & fB & fC & XOP_1_5=23 & Rc=1 & ps0D & ps1D & ps0B & ps1B & ps0A & ps1A & ps0C & ps1C
 {
-	zero:4 = 0;
-	zeroFloat:4 = int2float(zero);
+	zero:8 = 0;
+	zeroFloat:8 = int2float(zero);
 	ps0D = ps0C;
 	if (ps0A f>= zeroFloat) goto <ps1test>; 
 	ps0D = ps0B;
