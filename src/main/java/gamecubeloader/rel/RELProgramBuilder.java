@@ -27,6 +27,7 @@ import ghidra.program.model.address.AddressOverflowException;
 import ghidra.program.model.address.AddressSpace;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.MemoryAccessException;
+import ghidra.program.model.reloc.Relocation.Status;
 import ghidra.program.model.symbol.Symbol;
 import ghidra.util.Msg;
 import ghidra.util.filechooser.ExtensionFileFilter;
@@ -530,7 +531,7 @@ public class RELProgramBuilder  {
 							symbolName = symbol.getName();
 						}
 						
-						this.program.getRelocationTable().add(targetAddress, relocation.type, new long[] {newValue}, Ints.toByteArray(originalValue), symbolName);
+						this.program.getRelocationTable().add(targetAddress, Status.APPLIED, relocation.type, new long[] {newValue}, Ints.toByteArray(originalValue), symbolName);
 					}
 				}
 				

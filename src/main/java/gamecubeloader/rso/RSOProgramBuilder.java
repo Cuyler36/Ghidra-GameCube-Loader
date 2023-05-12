@@ -14,6 +14,7 @@ import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.mem.MemoryBlock;
 import ghidra.program.model.reloc.RelocationTable;
+import ghidra.program.model.reloc.Relocation.Status;
 import ghidra.program.model.symbol.Namespace;
 import ghidra.program.model.symbol.SourceType;
 import ghidra.program.model.symbol.SymbolTable;
@@ -315,7 +316,7 @@ public class RSOProgramBuilder {
 		}
 
 		long newValue = memory.getInt(targetAddress) & 0xFFFFFFFFL;
-		relocationTable.add(targetAddress, relocationType, new long[] { newValue },
+		relocationTable.add(targetAddress, Status.APPLIED, relocationType, new long[] { newValue },
 				Ints.toByteArray(originalValue), symbolName);
 	}
 

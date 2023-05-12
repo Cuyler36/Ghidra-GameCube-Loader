@@ -34,10 +34,12 @@ import ghidra.app.util.bin.BinaryReader;
 import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.app.util.opinion.BinaryLoader;
+import ghidra.app.util.opinion.LoadException;
 import ghidra.app.util.opinion.LoadSpec;
+import ghidra.app.util.opinion.Loaded;
 import ghidra.app.util.opinion.Loader;
-import ghidra.framework.model.DomainFolder;
 import ghidra.framework.model.DomainObject;
+import ghidra.framework.model.Project;
 import ghidra.program.model.address.Address;
 import ghidra.program.model.lang.CompilerSpec;
 import ghidra.program.model.lang.Language;
@@ -158,9 +160,9 @@ public class GameCubeLoader extends BinaryLoader {
 	}
 
 	@Override
-	protected List<LoadedProgram> loadProgram(ByteProvider provider, String programName,
-			DomainFolder programFolder, LoadSpec loadSpec, List<Option> options, MessageLog log,
-			Object consumer, TaskMonitor monitor)
+	protected List<Loaded<Program>> loadProgram(ByteProvider provider, String programName,
+			Project project, String programFolder, LoadSpec loadSpec, List<Option> options,
+			MessageLog log, Object consumer, TaskMonitor monitor)
 			throws IOException, CancelledException {
 		LanguageCompilerSpecPair pair = loadSpec.getLanguageCompilerSpec();
 		Language importerLanguage = getLanguageService().getLanguage(pair.languageID);
@@ -170,9 +172,12 @@ public class GameCubeLoader extends BinaryLoader {
 		Program program = createProgram(provider, programName, baseAddress, getName(),
 				importerLanguage, importerCompilerSpec, consumer);
 		
-		boolean success = false;
+		boolean success = true;
 		try {
-			success = this.loadInto(provider, loadSpec, options, log, program, monitor);
+			this.loadInto(provider, loadSpec, options, log, program, monitor);
+		}
+		catch (Exception e) {
+			success = false;
 		}
 		finally {
 			if (!success) {
@@ -181,17 +186,17 @@ public class GameCubeLoader extends BinaryLoader {
 			}
 		}
 		
-		List<LoadedProgram> results = new ArrayList<>();
+		List<Loaded<Program>> results = new ArrayList<>();
 		if (program != null) {
-			results.add(new LoadedProgram(program, programFolder));
+			results.add(new Loaded<Program>(program, programName, programFolder));
 		}
 		
 		return results;
 	}
 	
     @Override
-    protected boolean loadProgramInto(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
-            MessageLog messageLog, Program program, TaskMonitor monitor) {
+    protected void loadProgramInto(ByteProvider provider, LoadSpec loadSpec, List<Option> options,
+            MessageLog messageLog, Program program, TaskMonitor monitor) throws LoadException {
     	
     	if (this.binaryType != BinaryType.UNKNOWN) {
 	    	boolean autoLoadMaps = OptionUtils.getBooleanOptionValue(AUTOLOAD_MAPS_OPTION_NAME, options, true);
@@ -230,9 +235,10 @@ public class GameCubeLoader extends BinaryLoader {
 	        else {
 	        	new ApploaderProgramBuilder(apploaderHeader, provider, program, monitor, createDefaultSections, messageLog);
 	        }
-        	return true;
     	}
-    	return false;
+    	else {
+    		throw new LoadException("Failed to load, unsupported binary type");
+    	}
     }
 
 	@Override
