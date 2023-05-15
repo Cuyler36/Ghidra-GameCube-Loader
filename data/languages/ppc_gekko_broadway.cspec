@@ -94,6 +94,14 @@
         <register name="r31"/>
         <register name="r1"/>
         <register name="cr4"/>
+        <register name="GQR0"/>
+        <register name="GQR1"/>
+        <register name="GQR2"/>
+        <register name="GQR3"/>
+        <register name="GQR4"/>
+        <register name="GQR5"/>
+        <register name="GQR6"/>
+        <register name="GQR7"/>
       </unaffected>
     </prototype>
   </default_proto>
