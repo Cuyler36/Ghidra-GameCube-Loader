@@ -15,14 +15,17 @@
  */
 package gamecubeloader.plugins;
 
+import java.io.File;
 import java.io.FileWriter;
 import java.io.IOException;
 import java.io.PrintWriter;
-import java.util.List;
+import java.util.ArrayList;
+import java.util.Objects;
 
 import javax.swing.SwingUtilities;
 import javax.swing.event.ChangeEvent;
 import javax.swing.event.ChangeListener;
+import javax.swing.filechooser.FileSystemView;
 
 import docking.ActionContext;
 import docking.action.DockingAction;
@@ -32,26 +35,24 @@ import docking.widgets.filechooser.GhidraFileChooser;
 import docking.widgets.filechooser.GhidraFileChooserMode;
 import ghidra.app.plugin.PluginCategoryNames;
 import ghidra.app.plugin.ProgramPlugin;
-import ghidra.app.script.AskDialog;
 import ghidra.framework.plugintool.PluginInfo;
 import ghidra.framework.plugintool.PluginTool;
 import ghidra.framework.plugintool.util.PluginStatus;
 import ghidra.program.database.ProgramDB;
+import ghidra.program.model.symbol.Symbol;
+import ghidra.program.model.symbol.SymbolType;
 import ghidra.util.Msg;
-import ghidra.util.exception.CancelledException;
 import ghidra.util.filechooser.ExtensionFileFilter;
 
 /**
- * The FID program plugin is actually ONLY needed for administrative actions in FID.
- * The FID function name search analyzer will occur in Ghidra with or without this
- * plugin enabled.  This plugin has many actions, such as creating, attaching, enabling,
- * populating, and debugging (searching) FID databases.
+ * The Symbol Map Export plugin allows exporting labels and such as
+ * a .map-file that can then be imported into Dolphin Emulator for debugging purpose.
  */
 //@formatter:off
 @PluginInfo(
     status = PluginStatus.RELEASED,
     packageName = SymbolMapExporterPluginPackage.NAME,
-    category = PluginCategoryNames.SEARCH,
+    category = PluginCategoryNames.MISC,
     shortDescription = SymbolMapExporterPlugin.DESC,
     description = "This plugin allows exporting symbols to a format that Dolphin can understand."
 )
@@ -60,6 +61,8 @@ public class SymbolMapExporterPlugin extends ProgramPlugin implements ChangeList
     private static final String MENU_GROUP_1 = "group1";
     static final String DESC = "Export Symbols to Dolphin Map Format";
     static final String NAME = "Export Symbol Map";
+
+    private String last_saved_path;
 
     private DockingAction chooseAction;
 
@@ -89,78 +92,230 @@ public class SymbolMapExporterPlugin extends ProgramPlugin implements ChangeList
     }
 
     /**
-     * Method to create the "standard" actions, which users controlling or creating
-     * FID databases would want to use.
+     * Method to create the menu entry.
      */
     private void createStandardActions() {
-         DockingAction action = new DockingAction("Export Symbols", getName()) {
+        DockingAction action = new DockingAction("Export Symbols", getName()) {
             @Override
             public void actionPerformed(ActionContext context) {
-                try {
-                    exportToFile();
-                } catch (IOException e) {
-                    // TODO Auto-generated catch block
-                    e.printStackTrace();
-                }
+                exportToFile();
             }
         };
         action.setMenuBarData(
-            new MenuData(new String[] { ToolConstants.MENU_TOOLS, SymbolMapExporterPlugin.NAME,
-                "Export to File..." }, null, MENU_GROUP_1, MenuData.NO_MNEMONIC, "1"));
-        action.setDescription("Export Symbols to a file");
+                new MenuData(new String[] { ToolConstants.MENU_TOOLS, SymbolMapExporterPlugin.NAME,
+                "Export to .map file..." }, null, MENU_GROUP_1, MenuData.NO_MNEMONIC, "1"));
+        action.setDescription("Export Symbols to a .map file that Dolphin Emulator can load");
         tool.addAction(action);
         chooseAction = action;
     }
 
     /**
-     * Method to select which known FID databases are currently active
-     * during search.
-     * @throws IOException 
+     * Determines whenever the symbol name is a Ghidra default symbol name.
+     * @param symbolName The symbol name to rate.
+     * @return true whenever the given symbol name is a Ghirda default generated label, false otherwise.
      */
-    private void exportToFile() throws IOException {
+    private static boolean isGhidraDefaultName(String symbolName) {
+        Objects.requireNonNull(symbolName);
+        // Generic labels but not those that might have been changed
+        if (symbolName.matches("^(LAB|DAT|PTR|FUN|FLOAT|DOUBLE)_[0-9A-Fa-f]+$"))
+            return true;
+
+        // Switch-case stuff are basically always uninteresting
+        if (symbolName.startsWith("caseD_")
+                || symbolName.startsWith("switchD_")
+                || symbolName.startsWith("PTR_caseD_"))
+            return true;
+
+        return false;
+    }
+
+    /**
+     * Try to identify the GameID to use as the filename.
+     * @return GameID like GAMEP01, or null if it could not be determined.
+     */
+    private String getGameID() {
+        return null; // Currently seemingly impossible in a consistent way
+    }
+
+    /**
+     * Try to find the path of an dolphin installation to make a convenient
+     * default location so you can directly load into Dolphin.
+     * @return The directory to dolphin Maps folder, or null if not found.
+     */
+    private File getDolphinPath() {
+        var user_home = System.getProperty("user.home");
+        if (user_home == null) {
+            return null;
+        }
+
+        var possible_paths = new ArrayList<String>(5);
+
+        if (System.getProperty("os.name", "Unknown").toUpperCase().startsWith("WINDOWS")) {
+            var default_path = FileSystemView.getFileSystemView().getDefaultDirectory().getPath();
+            possible_paths.add(default_path + "/Dolphin Emulator/");
+        }
+
+        possible_paths.add(user_home + "/.dolphin-emu/");
+
+        var xdg_data_home = System.getenv("XDG_DATA_HOME");
+        if (xdg_data_home == null || xdg_data_home.isBlank()) {
+            xdg_data_home = user_home + "/" + ".local/share";
+        }
+        possible_paths.add(xdg_data_home + "/dolphin-emu/");
+
+        for (var path : possible_paths) {
+            var dir = new File(path);
+            if (dir.exists()) {
+                return dir;
+            }
+        }
+
+        return null;
+    }
+
+    /**
+     * Asks the user to choose the location and file name to save in.
+     * @return The file to save to, or null if cancelled or something.
+     */
+    private File chooseFile() {
         var fileChooser = new GhidraFileChooser(null);
         fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));
-        fileChooser.setTitle("Select an output file");
+        fileChooser.setTitle("Select where to save the map file");
         fileChooser.setFileSelectionMode(GhidraFileChooserMode.FILES_ONLY);
-        var selectedFile = fileChooser.getSelectedFile(true);
-        if (selectedFile != null) {
-            var writer = new PrintWriter(new FileWriter(selectedFile));
-            var symTable = this.currentProgram.getSymbolTable();
-            for (var sym : symTable.getAllSymbols(true)) {
-                var addr = sym.getAddress().getUnsignedOffset();
-                if (addr < 0x80000000L || addr >= 0x81800000L)
-                    continue; // Ignore out of range addresses
-                
-                var symName = sym.getName();
-                if (symName.startsWith("LAB_") || symName.startsWith("DAT_") || symName.startsWith("PTR_") || symName.startsWith("caseD_") || symName.equals("switchD"))
-                    continue; // Don't save Ghidra generated symbols.
-                var alignment = 8;
-                var size = 1L;
-                var func = this.currentProgram.getFunctionManager().getFunctionAt(sym.getAddress());
-                if (func != null) {
-                    size = func.getBody().getMaxAddress().getUnsignedOffset() - func.getBody().getMinAddress().getUnsignedOffset() + 1;
-                    alignment = 4;
-                }
-                else {
-                    var memBlock = this.currentProgram.getMemory().getBlock(sym.getAddress());
-                    if (memBlock != null && memBlock.isExecute() == false) {
-                        var cm = ((ProgramDB)this.currentProgram).getCodeManager();
-                        var data = cm.getDataAt(sym.getAddress());
-                        if (data != null) {
-                            size = data.getDataType().getLength();
-                            alignment = data.getDataType().getAlignment();
-                            if (size < 1) {
-                                size = 1;
-                            }
+
+        if (last_saved_path != null) {
+            fileChooser.setSelectedFile(new File(last_saved_path));
+        } else {
+            var dolphinPath = getDolphinPath();
+            if (dolphinPath != null) {
+                var name = getGameID();
+                if (name == null)
+                    name = this.currentProgram.getName().toString();
+                if (name == null)
+                    name = "";
+                var file = new File(dolphinPath, "Maps/" + name + ".map");
+                fileChooser.setSelectedFile(file);
+            }
+        }
+
+        var selected_file = fileChooser.getSelectedFile(true);
+        if (selected_file != null) {
+            this.last_saved_path = selected_file.getAbsolutePath();
+        }
+        return selected_file;
+    }
+
+    /**
+     * Ask the user where to export the symbol map and export the symbol map.
+     */
+    private void exportToFile() {
+        var selectedFile = chooseFile();
+        if (selectedFile == null) {
+            Msg.info(this, "Symbol map export file chooser has been cancelled or similar.");
+            return;
+        }
+
+        long startTime = System.currentTimeMillis();
+        try (var fileWriter = new FileWriter(selectedFile);
+                var writer = new PrintWriter(fileWriter)) {
+            exportToFile(writer);
+        } catch (IOException e) {
+            Msg.error(this, "Failed to write symbol map", e);
+            return;
+        } finally {
+            long endTime = System.currentTimeMillis();
+            Msg.debug(this, String.format("Symbol exporting took %dms", endTime - startTime));
+        }
+
+        Msg.info(this, "Successfully exported symbol map to " + selectedFile.getAbsolutePath());
+    }
+
+    /**
+     * Export the symbols to the symbol map.
+     * @param writer Where to write the information to.
+     * @throws IOException When some writing error occurs.
+     */
+    private void exportToFile(PrintWriter writer) throws IOException {
+        var symTable = this.currentProgram.getSymbolTable();
+        var codeMgr = ((ProgramDB)this.currentProgram).getCodeManager();
+        var memory = this.currentProgram.getMemory();
+
+        var functionSymbols = new ArrayList<Symbol>(500); // Rough estimation
+        var dataSymbols = new ArrayList<Symbol>(1000); // Rough estimation
+        var totalSymbols = 0L;
+
+        for (var sym : symTable.getAllSymbols(true)) {
+            totalSymbols++;
+            var addr = sym.getAddress().getUnsignedOffset();
+            if (addr < 0x80000000L || addr >= 0x81800000L)
+                continue; // Ignore out of range addresses
+
+            if (isGhidraDefaultName(sym.getName(true)))
+                continue; // Don't save Ghidra generated symbols
+
+            if (sym.getSymbolType() == SymbolType.FUNCTION) {
+                functionSymbols.add(sym);
+            } else {
+                dataSymbols.add(sym);
+            }
+        }
+
+        Msg.debug(this, String.format(
+                "Number of function symbols: %d, data symbols: %d, ignored: %d",
+                functionSymbols.size(), dataSymbols.size(),
+                totalSymbols - functionSymbols.size() - dataSymbols.size()));
+
+        writer.println(".text section layout");
+        for (var sym : functionSymbols) {
+            var addr = sym.getAddress().getUnsignedOffset();
+            var symName = sym.getName(true);
+
+            var alignment = 8;
+            var size = 1L;
+            var func = this.currentProgram.getFunctionManager().getFunctionAt(sym.getAddress());
+            if (func != null) {
+                size = func.getBody().getMaxAddress().getUnsignedOffset() - func.getBody().getMinAddress().getUnsignedOffset() + 1;
+                alignment = 4;
+            } else {
+                Msg.info(this, "Symbol " + symName + " claims to be a function, but no function found at their address!");
+                var memBlock = memory.getBlock(sym.getAddress());
+                if (memBlock != null && !memBlock.isExecute()) {
+                    var data = codeMgr.getDataAt(sym.getAddress());
+                    if (data != null) {
+                        alignment = data.getDataType().getAlignment();
+                        size = data.getDataType().getLength();
+                        if (size < 1) {
+                            size = 1;
                         }
                     }
                 }
-                writer.println(String.format("  %08x %06x %08x %2s %s \t%s", addr, size, addr, Integer.toString(alignment), symName, sym.getParentNamespace().getName()));
             }
-            writer.close();
+            writer.println(String.format("%08x %08x %08x % 2d %s",
+                    addr, size, addr, alignment, symName));
         }
-        else {
-            Msg.info(this, "A valid map file path must be selected!");
+
+        writer.println();
+        writer.println(".data section layout");
+        for (var sym : dataSymbols) {
+            var addr = sym.getAddress().getUnsignedOffset();
+            var symName = sym.getName(true);
+
+            var alignment = 0;
+            var size = 1L;
+            var memBlock = memory.getBlock(sym.getAddress());
+            if (memBlock != null && !memBlock.isExecute()) {
+                var data = codeMgr.getDataAt(sym.getAddress());
+                if (data != null) {
+                    alignment = data.getDataType().getAlignment();
+                    size = data.getDataType().getLength();
+                    if (size < 1) {
+                        size = 1;
+                    }
+                }
+            }
+
+            writer.println(String.format("%08x %08x %08x % 2d %s",
+                    addr, size, addr, alignment, symName));
         }
     }
 
@@ -169,25 +324,5 @@ public class SymbolMapExporterPlugin extends ProgramPlugin implements ChangeList
      */
     private void enableActions() {
         chooseAction.setEnabled(true);
-    }
-    
-    /**
-     * Method to ask a user to select from an array of choices (copied from GhidraScript).
-     * @param title popup window title
-     * @param message message to display during choice
-     * @param choices array of choices for the users
-     * @param defaultValue the default value to select
-     * @return the user's choice, or null
-     * @throws CancelledException if the user cancels
-     */
-    private <T> T askChoice(String title, String message, List<T> choices, T defaultValue) {
-        AskDialog<T> dialog =
-            new AskDialog<>(null, title, message, AskDialog.STRING, choices, defaultValue);
-        if (dialog.isCanceled()) {
-            return null;
-        }
-
-        T s = dialog.getChoiceValue();
-        return s;
     }
 }
