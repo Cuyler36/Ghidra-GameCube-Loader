@@ -244,16 +244,18 @@ public class RELProgramBuilder  {
 						var isText = (section.address & RELProgramBuilder.EXECUTABLE_SECTION) != 0;
 						var blockName = String.format("%s_%s%d", relInfo.name, isText ? ".text" : ".data", isText ? textCount : dataCount);
 						
-						MemoryBlockUtils.createInitializedBlock(this.program, false, blockName, this.addressSpace.getAddress(currentOutputAddress),
-								relInfo.reader.getByteProvider().getInputStream(section.address & ~1), section.size, "", null, true, true, isText, null, this.monitor);
+						// Update the address of the section with its virtual memory address.
+						var offs = section.address & ~1;
+						section.address = relBaseAddress + offs;
+
+						MemoryBlockUtils.createInitializedBlock(this.program, false, blockName, this.addressSpace.getAddress(section.address),
+								relInfo.reader.getByteProvider().getInputStream(offs), section.size, "", null, true, true, isText, null, this.monitor);
 						
 						if (isText) textCount++;
 						else dataCount++;
 						
-						// Update the address of the section with it's virtual memory address.
-						section.address = currentOutputAddress;
 						
-						currentOutputAddress += section.size;
+						currentOutputAddress = section.address + section.size;
 						
 						// Ensure output address is aligned to 4 bytes
 						if ((currentOutputAddress & 3) != 0) {
@@ -268,7 +270,30 @@ public class RELProgramBuilder  {
 			
 			// Add bss section.
 			if (relInfo.header.bssSize != 0 && relInfo.header.bssSectionId != 0) {
-				if (relInfo.header.moduleVersion < 2 || relInfo.header.bssSectionAlignment == 0) {
+				if (this.specifyModuleMemAddrs) {
+					// TODO: Check against addresses already containing memory sections.
+					var setValidAddress = false;
+					while (!setValidAddress) {
+						var selectedAddress = OptionDialog.showInputSingleLineDialog(null, "Specify BSS Address", "Specify the BSS memory address for Module " +
+								relInfo.name, Long.toHexString(currentOutputAddress));
+						
+						if (selectedAddress == null) {
+							break; // The user selected the cancel dialog.
+						}
+						
+						try {
+							var specifiedAddr = Long.parseUnsignedLong(selectedAddress, 16) & 0xFFFFFFFF;
+							if (specifiedAddr >= 0x80000000L && (specifiedAddr + relInfo.header.Size()) < 0x81800000L) {
+								currentOutputAddress = specifiedAddr;
+								setValidAddress = true;
+							}
+						}
+						catch (NumberFormatException e) {
+							continue;
+						}
+					}
+				}	
+				else if (relInfo.header.moduleVersion < 2 || relInfo.header.bssSectionAlignment == 0) {
 					currentOutputAddress = align(currentOutputAddress, 0x20);
 				}
 				else {
