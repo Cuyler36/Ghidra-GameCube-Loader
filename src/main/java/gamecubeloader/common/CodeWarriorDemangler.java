@@ -11,6 +11,7 @@ import ghidra.app.util.demangler.DemangledType;
 import ghidra.app.util.demangler.DemangledVariable;
 import ghidra.app.util.demangler.Demangler;
 import ghidra.app.util.demangler.DemanglerOptions;
+import ghidra.app.util.demangler.DemangledParameter;
 import ghidra.program.model.listing.Program;
 import ghidra.util.map.TypeMismatchException;
 
@@ -205,7 +206,7 @@ public final class CodeWarriorDemangler implements Demangler {
                 tk();
                 func.setReturnType(this.nextType());
             } else {
-                func.addParameter(this.nextType());
+                func.addParameter(new DemangledParameter(this.nextType()));
             }
         }
 
