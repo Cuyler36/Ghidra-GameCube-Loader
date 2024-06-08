@@ -1,16 +1,8 @@
 package gamecubeloader.common;
 
 import java.util.ArrayList;
-import ghidra.app.util.demangler.DemangledDataType;
-import ghidra.app.util.demangler.DemangledException;
-import ghidra.app.util.demangler.DemangledFunction;
-import ghidra.app.util.demangler.DemangledFunctionPointer;
-import ghidra.app.util.demangler.DemangledObject;
-import ghidra.app.util.demangler.DemangledTemplate;
-import ghidra.app.util.demangler.DemangledType;
-import ghidra.app.util.demangler.DemangledVariable;
-import ghidra.app.util.demangler.Demangler;
-import ghidra.app.util.demangler.DemanglerOptions;
+
+import ghidra.app.util.demangler.*;
 import ghidra.program.model.listing.Program;
 import ghidra.util.map.TypeMismatchException;
 
@@ -205,7 +197,7 @@ public final class CodeWarriorDemangler implements Demangler {
                 tk();
                 func.setReturnType(this.nextType());
             } else {
-                func.addParameter(this.nextType());
+                func.addParameter(new DemangledParameter(this.nextType()));
             }
         }
 
