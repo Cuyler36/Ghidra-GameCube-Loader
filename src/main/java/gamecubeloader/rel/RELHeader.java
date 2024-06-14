@@ -148,7 +148,7 @@ public class RELHeader {
 	}
 	
 	public int Size() {
-		switch ((int) this.moduleId) {
+		switch ((int) this.moduleVersion) {
 		case 0:
 		case 1:
 			return 0x40;
@@ -160,5 +160,9 @@ public class RELHeader {
 		default:
 			return 0x4C; 
 		}
+	}
+
+	public int FullSize() {
+		return this.Size() + (int) this.sectionCount * 8;
 	}
 }
