@@ -5,20 +5,16 @@ on:
 jobs:
   gradle:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        ghidra:
-          - "11.1"
     steps:
     - uses: actions/checkout@v3
     - uses: actions/setup-java@v3
       with:
         distribution: 'temurin'
         java-version: '17'
-    - uses: antoniovazquezblanco/setup-ghidra@v1.2.3
+    - uses: antoniovazquezblanco/setup-ghidra@v2.0.5
       with:
         auth_token: ${{ secrets.GITHUB_TOKEN }}
-        version: ${{ matrix.ghidra }}
+        version: 11.1.2
     - name: Execute Gradle build
       run: ./gradlew -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
     - name: Release
