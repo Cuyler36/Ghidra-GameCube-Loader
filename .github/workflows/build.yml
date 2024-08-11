@@ -18,11 +18,11 @@ jobs:
         unzip ghidra.zip -d ~/ghidra
         rm ghidra.zip
       env:
-        GHIDRA_URL: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.1_build/ghidra_11.1_PUBLIC_20240607.zip
+        GHIDRA_URL: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.1.2_build/ghidra_11.1.2_PUBLIC_20240709.zip
     - name: Execute Gradle build
       run: ./gradlew
       env:
-        GHIDRA_INSTALL_DIR: /home/runner/ghidra/ghidra_11.1_PUBLIC/
+        GHIDRA_INSTALL_DIR: /home/runner/ghidra/ghidra_11.1.2_PUBLIC/
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
