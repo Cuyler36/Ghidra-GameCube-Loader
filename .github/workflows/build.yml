@@ -11,18 +11,12 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
-    - name: Install Ghidra
-      run: |
-        curl -L "$GHIDRA_URL" -o ghidra.zip
-        mkdir ~/ghidra
-        unzip ghidra.zip -d ~/ghidra
-        rm ghidra.zip
-      env:
-        GHIDRA_URL: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.1.2_build/ghidra_11.1.2_PUBLIC_20240709.zip
+    - uses: antoniovazquezblanco/setup-ghidra@v2.0.5
+      with:
+        auth_token: ${{ secrets.GITHUB_TOKEN }}
+        version: 11.1.2
     - name: Execute Gradle build
-      run: ./gradlew
-      env:
-        GHIDRA_INSTALL_DIR: /home/runner/ghidra/ghidra_11.1.2_PUBLIC/
+      run: ./gradlew -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
