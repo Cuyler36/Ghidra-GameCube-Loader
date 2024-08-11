@@ -6,23 +6,17 @@ jobs:
   gradle:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v3
-    - uses: actions/setup-java@v3
+    - uses: actions/checkout@v4
+    - uses: actions/setup-java@v4
       with:
         distribution: 'temurin'
         java-version: '17'
-    - name: Install Ghidra
-      run: |
-        curl -L "$GHIDRA_URL" -o ghidra.zip
-        mkdir ~/ghidra
-        unzip ghidra.zip -d ~/ghidra
-        rm ghidra.zip
-      env:
-        GHIDRA_URL: https://github.com/NationalSecurityAgency/ghidra/releases/download/Ghidra_11.1_build/ghidra_11.1_PUBLIC_20240607.zip
+    - uses: antoniovazquezblanco/setup-ghidra@v2.0.5
+      with:
+        auth_token: ${{ secrets.GITHUB_TOKEN }}
+        version: 11.1.2
     - name: Execute Gradle build
-      run: ./gradlew
-      env:
-        GHIDRA_INSTALL_DIR: /home/runner/ghidra/ghidra_11.1_PUBLIC/
+      run: ./gradlew -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
     - name: Release
       uses: softprops/action-gh-release@v1
       if: startsWith(github.ref, 'refs/tags/')
