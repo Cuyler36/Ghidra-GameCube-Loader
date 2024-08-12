@@ -22,10 +22,10 @@ import resources.ResourceManager;
  * Plugin package for the Symbol Map Exporter plugin.
  */
 public class SymbolMapExporterPluginPackage extends PluginPackage {
-    public static final String NAME = "Symbol Map Exporter";
+    public static final String NAME = "Symbol Map Exporter for Dolphin Emulator";
 
     public SymbolMapExporterPluginPackage() {
         super(NAME, ResourceManager.loadImage("images/vcard.png"),
-                "For exporting symbols to map files");
+                "For exporting symbols to map files for Dolphin Emulator");
     }
 }
