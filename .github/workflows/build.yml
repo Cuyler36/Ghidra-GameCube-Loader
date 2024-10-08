@@ -11,7 +11,7 @@ jobs:
       with:
         distribution: 'temurin'
         java-version: '17'
-    - uses: antoniovazquezblanco/setup-ghidra@v2.0.5
+    - uses: antoniovazquezblanco/setup-ghidra@v2.0.6
       with:
         auth_token: ${{ secrets.GITHUB_TOKEN }}
         version: 11.1.2
