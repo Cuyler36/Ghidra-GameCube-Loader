@@ -1,9 +1,9 @@
 // Builds a Ghidra Extension for a given Ghidra installation.
 //
-// An absolute path to the Ghidra installation directory must be supplied either by setting the 
+// An absolute path to the Ghidra installation directory must be supplied either by setting the
 // GHIDRA_INSTALL_DIR environment variable or Gradle project property:
 //
-//     > export GHIDRA_INSTALL_DIR=<Absolute path to Ghidra> 
+//     > export GHIDRA_INSTALL_DIR=<Absolute path to Ghidra>
 //     > gradle
 //
 //         or
@@ -60,20 +60,20 @@ configurations {
 dependencies {
     implementation fileTree(dir: ghidraInstallDir + '/Ghidra/Processors', include: "**/*.jar")
     localDeps group: 'org.lz4', name: 'lz4-java', version: '1.5.1'
-    implementation configurations.localDeps
+    implementation 'org.lz4:lz4-java:1.5.1'
 }
 
 buildExtension {
-    baseName "${project.name}-${project.version}-${getGitHash()}-Ghidra_${ghidra_version}".replace(' ', '_')
-    extension 'zip'
-    destinationDir DISTRIBUTION_DIR
+    archiveBaseName = "${project.name}-${project.version}-${getGitHash()}-Ghidra_${ghidra_version}".replace(' ', '_')
+    archiveExtension = 'zip'
+    destinationDirectory = DISTRIBUTION_DIR
     version ''
-    
+
     // Make sure that we don't try to copy the same file with the same path into the
     // zip (this can happen!)
     duplicatesStrategy 'exclude'
-    
-    // This filtered property file copy must appear before the general 
+
+    // This filtered property file copy must appear before the general
     // copy to ensure that it is prefered over the unmodified file
     File propFile = new File(project.projectDir, "extension.properties")
     from (propFile) {
@@ -83,7 +83,7 @@ buildExtension {
         filter (org.apache.tools.ant.filters.ReplaceTokens, tokens: [extname: name])
         into PATH_IN_ZIP
     }
-    
+
     from (project.jar) {
         into PATH_IN_ZIP + "/lib"
     }
@@ -92,7 +92,7 @@ buildExtension {
     from (configurations.localDeps) {
         into PATH_IN_ZIP + "/lib"
     }
-        
+
     from (project.projectDir) {
         exclude 'build/**'
         exclude '*.gradle'
@@ -110,11 +110,7 @@ buildExtension {
         exclude 'developer_scripts'
         exclude '.antProperties.xml'
         exclude 'eclipse/**'
-        
-        into PATH_IN_ZIP
-    }
 
-    doLast {
-        println "\nCreated " + baseName + "." + extension + " in " + destinationDir
+        into PATH_IN_ZIP
     }
 }

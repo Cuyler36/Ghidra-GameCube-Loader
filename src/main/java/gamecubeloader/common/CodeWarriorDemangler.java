@@ -9,12 +9,12 @@ import ghidra.util.map.TypeMismatchException;
 public final class CodeWarriorDemangler implements Demangler {
     public final String CODEWARRIOR_DEMANGLE_PROP = "DemangleCW"; /* When defined, forces CodeWarrior demangling on all symbols. */
     public final String CODEWARRIOR_NO_DEMANGLE_PROP = "NoDemangleCW"; /* When defined, prevents CodeWarrior demangling on all symbols. */
-    
+
     public String str;
     public boolean containsInvalidSpecifier;
 
     public CodeWarriorDemangler() { } /* Empty constructor for DemanglerCmd::applyTo */
-    
+
     public CodeWarriorDemangler(String g) {
         this.str = g;
     }
@@ -74,7 +74,7 @@ public final class CodeWarriorDemangler implements Demangler {
                 break;
             }
         }
-        
+
         o.setTemplate(template);
     }
 
@@ -106,12 +106,12 @@ public final class CodeWarriorDemangler implements Demangler {
         // If the symbol starts with __, exit.
         if (firstDunder < 0)
             return null;
-        
+
         // Ensure that any trailing underscores in the function name are accounted for
         while (symbolName.charAt(firstDunder + 2) == '_') {
             firstDunder++;
         }
-        
+
         String parameters = symbolName.substring(firstDunder + 2);
         // After the dunder comes the class, if it exists, followed by 'F', followed by parameters.
         var demangler = new CodeWarriorDemangler(parameters);
@@ -129,7 +129,7 @@ public final class CodeWarriorDemangler implements Demangler {
 
             String functionName = symbolName.substring(0, firstDunder);
             String operatorName = demangleSpecialOperator(functionName);
-    
+
             if (operatorName != null) {
                 d.setOverloadedOperator(true);
                 d.setName(operatorName);
@@ -138,23 +138,23 @@ public final class CodeWarriorDemangler implements Demangler {
                     functionName = parentClass.getName();
                 else if (functionName.equals("__dt"))
                     functionName = "~" + parentClass.getName();
-    
+
                 d.setName(functionName);
-    
+
                 CodeWarriorDemangler.demangleTemplates(d);
             }
-            
+
             if (demangler.containsInvalidSpecifier)
                 return null;
-            
+
             return d;
         }
-        
+
         // It could be a member or vtable
         if (demangler.isEmpty()) {
             var name = symbolName.substring(0, firstDunder);
             var member = new DemangledVariable(symbolName, name, name);
-            
+
             if (parentClass != null) {
                 var namespace = parentClass.getNamespace();
                 var className = parentClass.getDemangledName();
@@ -165,10 +165,10 @@ public final class CodeWarriorDemangler implements Demangler {
                 classNamespace.setNamespace(namespace);
                 member.setNamespace(classNamespace);
             }
-            
+
             return member;
         }
-        
+
         return null;
     }
 
@@ -243,7 +243,7 @@ public final class CodeWarriorDemangler implements Demangler {
             var val = names.get(compCount - 1);
             var d = new DemangledDataType(null, val, val);
             demangleTemplates(d);
-            
+
             // Create namespaces
             DemangledType namespaceType = new DemangledType(null, names.get(0), names.get(0)); // Top level
             for (String ns : names.subList(1, names.size() - 1))
@@ -252,7 +252,7 @@ public final class CodeWarriorDemangler implements Demangler {
                 subNamespace.setNamespace(namespaceType);
                 namespaceType = subNamespace;
             }
-            
+
             d.setNamespace(namespaceType);
             return d;
         } else if (tok == 'F') {
@@ -264,13 +264,13 @@ public final class CodeWarriorDemangler implements Demangler {
                     break;
 
                 tok = hd();
-                
+
                 if (tok == '_') {
                     tk();
                     func.setReturnType(this.nextType());
                     break;
                 }
-                
+
                 func.addParameter(this.nextType());
             }
 
@@ -428,7 +428,7 @@ public final class CodeWarriorDemangler implements Demangler {
                     return "operator ->*";
             }
         }
-        
+
         return null;
     }
 
@@ -446,13 +446,12 @@ public final class CodeWarriorDemangler implements Demangler {
     }
 
     @Override
-    @SuppressWarnings("removal")
-    public DemangledObject demangle(String mangled, boolean demangleOnlyKnownPatterns) throws DemangledException {
-        return CodeWarriorDemangler.demangleSymbol(mangled);
+    public DemangledObject demangle(MangledContext mangledContext) throws DemangledException {
+        return CodeWarriorDemangler.demangleSymbol(mangledContext.getMangled());
     }
 
     @Override
-    public DemangledObject demangle(String mangled, DemanglerOptions options) throws DemangledException {
+    public DemangledObject demangle(String mangled) throws DemangledException {
         return CodeWarriorDemangler.demangleSymbol(mangled);
     }
 }
