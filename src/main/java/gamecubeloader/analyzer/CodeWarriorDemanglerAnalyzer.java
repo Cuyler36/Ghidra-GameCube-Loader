@@ -5,12 +5,11 @@ import ghidra.app.plugin.core.analysis.AbstractDemanglerAnalyzer;
 import ghidra.app.util.demangler.DemangledException;
 import ghidra.app.util.demangler.DemangledObject;
 import ghidra.app.util.demangler.DemanglerOptions;
-import ghidra.app.util.demangler.MangledContext;
 import ghidra.app.util.importer.MessageLog;
 import ghidra.program.model.listing.Program;
 
 /***
- *
+ * 
  * Demangler analyzer for CodeWarrior symbols.
  */
 public class CodeWarriorDemanglerAnalyzer extends AbstractDemanglerAnalyzer {
@@ -21,7 +20,7 @@ public class CodeWarriorDemanglerAnalyzer extends AbstractDemanglerAnalyzer {
             "the name and apply datatypes to parameters.";
 
     private CodeWarriorDemangler demangler = new CodeWarriorDemangler();
-
+    
     public CodeWarriorDemanglerAnalyzer() {
         super(NAME, DESCRIPTION);
         setDefaultEnablement(true);
@@ -33,9 +32,9 @@ public class CodeWarriorDemanglerAnalyzer extends AbstractDemanglerAnalyzer {
     }
 
     @Override
-    protected DemangledObject doDemangle(MangledContext context, MessageLog log)
+    protected DemangledObject doDemangle(String mangled, DemanglerOptions options, MessageLog log)
             throws DemangledException {
-        DemangledObject demangled = demangler.demangle(context);
+        DemangledObject demangled = demangler.demangle(mangled, options);
         return demangled;
     }
 
