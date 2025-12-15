@@ -69,7 +69,7 @@ public class SymbolMapExporterPlugin extends ProgramPlugin implements ChangeList
 
     @Override
     public void stateChanged(ChangeEvent e) {
-        SwingUtilities.invokeLater(() -> updateActions());
+        SwingUtilities.invokeLater(this::updateActions);
     }
 
     private void updateActions() {
@@ -143,7 +143,7 @@ public class SymbolMapExporterPlugin extends ProgramPlugin implements ChangeList
                 }
                 else {
                     var memBlock = this.currentProgram.getMemory().getBlock(sym.getAddress());
-                    if (memBlock != null && memBlock.isExecute() == false) {
+                    if (memBlock != null && !memBlock.isExecute()) {
                         var cm = ((ProgramDB)this.currentProgram).getCodeManager();
                         var data = cm.getDataAt(sym.getAddress());
                         if (data != null) {

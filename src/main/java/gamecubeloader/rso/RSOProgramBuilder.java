@@ -1,25 +1,25 @@
 package gamecubeloader.rso;
 
-import gamecubeloader.common.*;
+import gamecubeloader.common.CodeWarriorDemangler;
+import gamecubeloader.common.SectionInfo;
 import ghidra.app.util.MemoryBlockUtils;
-import ghidra.app.util.bin.ByteProvider;
 import ghidra.app.util.demangler.DemangledFunction;
 import ghidra.app.util.demangler.DemangledObject;
 import ghidra.app.util.demangler.DemanglerOptions;
-import ghidra.app.util.importer.MessageLog;
+import ghidra.app.util.opinion.LoadException;
+import ghidra.app.util.opinion.Loader;
 import ghidra.program.database.function.OverlappingFunctionException;
-import ghidra.program.model.address.*;
+import ghidra.program.model.address.Address;
+import ghidra.program.model.address.AddressOutOfBoundsException;
+import ghidra.program.model.address.AddressOverflowException;
+import ghidra.program.model.address.AddressSet;
 import ghidra.program.model.listing.Program;
 import ghidra.program.model.mem.Memory;
 import ghidra.program.model.mem.MemoryAccessException;
 import ghidra.program.model.mem.MemoryBlock;
-import ghidra.program.model.reloc.RelocationTable;
 import ghidra.program.model.reloc.Relocation.Status;
-import ghidra.program.model.symbol.Namespace;
 import ghidra.program.model.symbol.SourceType;
-import ghidra.program.model.symbol.SymbolTable;
 import ghidra.util.Msg;
-import ghidra.util.exception.CancelledException;
 import ghidra.util.exception.InvalidInputException;
 import ghidra.util.task.TaskMonitor;
 import org.apache.commons.io.FilenameUtils;
@@ -28,21 +28,6 @@ import org.python.google.common.primitives.Ints;
 import java.io.IOException;
 
 public class RSOProgramBuilder {
-	private RSOHeader rso;
-
-	private long baseAddress;
-	private AddressSpace addressSpace;
-	private SymbolTable symbolTable;
-	private Namespace globalNamespace;
-	private RelocationTable relocationTable;
-	private Memory memory;
-	private Program program;
-	private TaskMonitor monitor;
-	private MessageLog log;
-
-	private String binaryName;
-	private Address[] sectionsAddress;
-
 	// Relocation types supported by RSOLink.
 	private static final short R_PPC_NONE = 0;
 	private static final short R_PPC_ADDR32 = 1;
@@ -57,35 +42,25 @@ public class RSOProgramBuilder {
 	private static final short R_PPC_REL24 = 10;
 	private static final short R_PPC_REL14 = 11;
 
-	public RSOProgramBuilder(RSOHeader rso, ByteProvider provider, Program program,
-                             TaskMonitor monitor, MessageLog log)
-			throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException, CancelledException {
-		this.rso = rso;
-		this.program = program;
-		this.monitor = monitor;
-		this.log = log;
+	public static void load(Program program, Loader.ImporterSettings settings, RSOHeader rso)
+		throws LoadException {
+		var baseAddress = 0x80000000L;
+		var provider = settings.provider();
+		var addressSpace = program.getAddressFactory().getDefaultAddressSpace();
+		var symbolTable = program.getSymbolTable();
+		var memory = program.getMemory();
 
-		this.binaryName = provider.getName();
-		this.symbolTable = this.program.getSymbolTable();
-		this.globalNamespace = this.program.getGlobalNamespace();
-		this.relocationTable = this.program.getRelocationTable();
-		this.memory = this.program.getMemory();
-
-		
-		this.load(provider);
-	}
-
-	protected void load(ByteProvider provider)
-			throws IOException, AddressOverflowException, AddressOutOfBoundsException, MemoryAccessException, CancelledException {
-		this.baseAddress = 0x80000000L;
-		this.addressSpace = program.getAddressFactory().getDefaultAddressSpace();
-		
-		var  rsoModule = new RSOModule(rso, provider);
+		RSOModule rsoModule;
+		try {
+			rsoModule = new RSOModule(rso, provider);
+		} catch (IOException e) {
+			throw new LoadException(e);
+		}
 		rsoModule.header.bssSection = 0;
 
-		var currentOutputAddress = this.baseAddress;
-		this.sectionsAddress = new Address[(int)rsoModule.header.numSections];
-		var blockNamePrefix = FilenameUtils.getBaseName(this.program.getName());
+		var currentOutputAddress = baseAddress;
+		var sectionsAddress = new Address[(int) rsoModule.header.numSections];
+		var blockNamePrefix = FilenameUtils.getBaseName(program.getName());
 
 		var predefinedSectionTypes = RSOSection.values();
 
@@ -103,7 +78,7 @@ public class RSOProgramBuilder {
 						sectionName = sectionType.getName();
 					}
 
-					if (sectionType == null || sectionName.equals("")) {
+					if (sectionType == null || sectionName.isEmpty()) {
 						sectionType = RSOSection.NULL;
 						sectionName = String.format(".unknown%02d", unk++);
 					}
@@ -111,9 +86,13 @@ public class RSOProgramBuilder {
 					var blockName = String.format("%s%s", blockNamePrefix, sectionName);
 					var sectionAddress = addressSpace.getAddress(currentOutputAddress);
 
-					MemoryBlockUtils.createInitializedBlock(program, false, blockName, sectionAddress,
+					try {
+						MemoryBlockUtils.createInitializedBlock(program, false, blockName, sectionAddress,
 							provider.getInputStream(section.address), section.size, "", null,
-							sectionType.isReadable(), sectionType.isWriteable(), sectionType.isExecutable(), log, monitor);
+							sectionType.isReadable(), sectionType.isWriteable(), sectionType.isExecutable(), settings.log(), settings.monitor());
+					} catch (IOException | AddressOverflowException e) {
+						throw new LoadException(String.format("Failed to load RSO section %d", s), e);
+					}
 
 					sectionsAddress[s] = sectionAddress;
 					currentOutputAddress += section.size;
@@ -128,10 +107,10 @@ public class RSOProgramBuilder {
 		if (rsoModule.header.bssSize != 0 && rsoModule.header.bssSection != 0) {
 			currentOutputAddress = align(currentOutputAddress, 0x4);
 
-			var bssSectionAddress = this.addressSpace.getAddress(currentOutputAddress);
-			MemoryBlockUtils.createUninitializedBlock(this.program, false,
-					blockNamePrefix+ ".bss", bssSectionAddress, rsoModule.header.bssSize, "", null,
-					true, true, false, null);
+			var bssSectionAddress = addressSpace.getAddress(currentOutputAddress);
+			MemoryBlockUtils.createUninitializedBlock(program, false,
+				blockNamePrefix + ".bss", bssSectionAddress, rsoModule.header.bssSize, "", null,
+				true, true, false, null);
 
 			// Set the bss virtual memory address.
 			sectionsAddress[rsoModule.header.bssSection] = bssSectionAddress;
@@ -163,15 +142,15 @@ public class RSOProgramBuilder {
 
 		// Apply external relocation
 		var importedSymbols = rsoModule.getImportSymbols();
-		Msg.info(this, String.format("Imported Symbol %d", importedSymbols.size()));
+		Msg.info(RSOProgramBuilder.class, String.format("Imported Symbol %d", importedSymbols.size()));
 
-		if (importedSymbols.size() > 0) {
+		if (!importedSymbols.isEmpty()) {
 			// Create EXTERNAL section
 			final int IMP_SYMBOL_SIZE = 4;
 			var externalBlockSize = importedSymbols.size() * IMP_SYMBOL_SIZE;
 			var externalBlockOffset = currentOutputAddress;
-			var externalBlock = createExternalBlock(program.getMemory(),
-					this.addressSpace.getAddress(currentOutputAddress), externalBlockSize);
+			var externalBlock = createExternalBlock(settings, program.getMemory(),
+				addressSpace.getAddress(currentOutputAddress), externalBlockSize);
 
 			if (externalBlock == null) {
 				return;
@@ -188,35 +167,39 @@ public class RSOProgramBuilder {
 				var relocationIndex = importedSymbol.relOffset / RSOModule.Relocation.SIZE;
 				var externalRelocations = rsoModule.getExternalRelocations();
 				while (relocationIndex < externalRelocations.size()) {
-					var externalRelocation = externalRelocations.get((int)relocationIndex);
+					var externalRelocation = externalRelocations.get((int) relocationIndex);
 					relocationIndex += 1;
 
 					if (impIndex != externalRelocation.getSymbolIndex()) {
 						break;
 					}
 
-					if (!appliedSymbol) {
-						var relocationType = externalRelocation.getRelocationType();
-						var originalValue = memory.getInt(this.addressSpace.getAddress(baseAddress + externalRelocation.offset));
+					try {
+						if (!appliedSymbol) {
+							var relocationType = externalRelocation.getRelocationType();
+							var originalValue = memory.getInt(addressSpace.getAddress(baseAddress + externalRelocation.offset));
 
-						// TODO(InusualZ): Is there a better way to detect if it's a function?
-						var opcode = originalValue & 0xFC000000;
-						var isBranchOpCode = opcode == 16 || opcode == 18 || opcode == 19;
-						var createThunkFunction = isBranchOpCode && relocationType != R_PPC_ADDR32 && relocationType != R_PPC_ADDR16_LO;
+							// TODO(InusualZ): Is there a better way to detect if it's a function?
+							var opcode = originalValue & 0xFC000000;
+							var isBranchOpCode = opcode == 16 || opcode == 18 || opcode == 19;
+							var createThunkFunction = isBranchOpCode && relocationType != R_PPC_ADDR32 && relocationType != R_PPC_ADDR16_LO;
 
-						applySymbol(importedSymbol.name, this.addressSpace.getAddress(importedAddress),
-								demanglerOptions, IMP_SYMBOL_SIZE, createThunkFunction);
+							applySymbol(program, importedSymbol.name, addressSpace.getAddress(importedAddress),
+								demanglerOptions, IMP_SYMBOL_SIZE, createThunkFunction, settings.monitor());
 
-						appliedSymbol = true;
+							appliedSymbol = true;
+						}
+
+						applyRelocation(program, rso, externalRelocation, importedAddress, importedSymbol.name, sectionsAddress);
+					} catch (MemoryAccessException e) {
+						throw new LoadException(String.format("Failed to apply external relocation %d", relocationIndex), e);
 					}
-
-					applyRelocation(externalRelocation, baseAddress, importedAddress, importedSymbol.name);
 				}
 
 				if (appliedSymbol) {
-					Msg.info(this, String.format("Applied relocation for `%s`", importedSymbol.name));
+					Msg.info(RSOProgramBuilder.class, String.format("Applied relocation for `%s`", importedSymbol.name));
 				} else {
-					Msg.error(this, String.format("Unable to relocate `%s`", importedSymbol.name));
+					Msg.error(RSOProgramBuilder.class, String.format("Unable to relocate `%s`", importedSymbol.name));
 				}
 			}
 		}
@@ -226,26 +209,27 @@ public class RSOProgramBuilder {
 			var section = rsoModule.header.sections[relocation.getSectionIndex()];
 
 			try {
-				applyRelocation(relocation, baseAddress, section.address, "__INTERNAL__");
+				applyRelocation(program, rso, relocation, section.address, "__INTERNAL__", sectionsAddress);
 			} catch (MemoryAccessException e) {
-				Msg.error(this, String.format("Out of bound relocation - { .off=%08X, .ind=%d, rlt=%d, soff=%08X }",
-						relocation.offset, relocation.getSectionIndex(), relocation.getRelocationType(), relocation.addend), e);
+				Msg.error(RSOProgramBuilder.class, String.format("Out of bound relocation - { .off=%08X, .ind=%d, rlt=%d, soff=%08X }",
+					relocation.offset, relocation.getSectionIndex(), relocation.getRelocationType(), relocation.addend), e);
 			}
 		}
 
 		// Apply Symbols For Exported Functions
 		rsoModule.getExportSymbols().forEach(exportSymbol -> {
-			var sectionAddress = sectionsAddress[(int)exportSymbol.section];
+			var sectionAddress = sectionsAddress[(int) exportSymbol.section];
 			var symbolAddress = sectionAddress.add(exportSymbol.value);
-			applySymbol(exportSymbol.name, symbolAddress, demanglerOptions, 0, false);
+			applySymbol(program, exportSymbol.name, symbolAddress, demanglerOptions, 0, false, settings.monitor());
 		});
 	}
 
-	private void applyRelocation(RSOModule.Relocation relocation, long baseAddress, long addr, String symbolName)
-			throws MemoryAccessException {
-		var targetAddress = translatePhysicalAddress(relocation.offset);
+	private static void applyRelocation(Program program, RSOHeader rso, RSOModule.Relocation relocation, long addr, String symbolName, Address[] sectionsAddress)
+		throws MemoryAccessException {
+		var targetAddress = translatePhysicalAddress(rso, relocation.offset, sectionsAddress);
 		var addressValue = addr + relocation.addend;
 
+		var memory = program.getMemory();
 		var originalValue = memory.getInt(targetAddress);
 		var writeValue = 0L;
 
@@ -257,31 +241,31 @@ public class RSOProgramBuilder {
 					writeValue += 1;
 				}
 
-				memory.setShort(targetAddress, (short)writeValue, true);
+				memory.setShort(targetAddress, (short) writeValue, true);
 				break;
 
 			case R_PPC_ADDR24:
 				writeValue = (addressValue & 0x3FFFFFC) |
-						(originalValue & 0xFC000003);
+					(originalValue & 0xFC000003);
 
-				memory.setInt(targetAddress, (int)writeValue, true);
+				memory.setInt(targetAddress, (int) writeValue, true);
 				break;
 
 			case R_PPC_ADDR32:
-				memory.setInt(targetAddress, (int)addressValue, true);
+				memory.setInt(targetAddress, (int) addressValue, true);
 				break;
 
 			case R_PPC_ADDR16:
 			case R_PPC_ADDR16_LO:
 				writeValue = (addressValue) & 0xFFFF;
 
-				memory.setShort(targetAddress, (short)writeValue, true);
+				memory.setShort(targetAddress, (short) writeValue, true);
 				break;
 
 			case R_PPC_ADDR16_HI:
 				writeValue = ((addressValue) >> 16) & 0xFFFF;
 
-				memory.setShort(targetAddress, (short)writeValue, true);
+				memory.setShort(targetAddress, (short) writeValue, true);
 				break;
 
 			case R_PPC_NONE:
@@ -289,38 +273,38 @@ public class RSOProgramBuilder {
 
 			case R_PPC_REL24:
 				writeValue = ((addressValue - targetAddress.getOffset()) & 0x3FFFFFC) |
-						(originalValue & 0xFC000003);
+					(originalValue & 0xFC000003);
 
-				memory.setInt(targetAddress, (int)writeValue, true);
+				memory.setInt(targetAddress, (int) writeValue, true);
 				break;
 
 			case R_PPC_ADDR14:
 			case R_PPC_ADDR14_BRNTAKEN:
 			case R_PPC_ADDR14_BRTAKEN:
 				writeValue = (addressValue & 0xFFFC) |
-						(originalValue & 0xFFFF0003);
+					(originalValue & 0xFFFF0003);
 
-				memory.setInt(targetAddress, (int)writeValue, true);
+				memory.setInt(targetAddress, (int) writeValue, true);
 				break;
 
 			case R_PPC_REL14:
-				writeValue = ((addressValue- targetAddress.getOffset()) & 0xFFFC) |
-						(originalValue & 0xFFFF0003);
+				writeValue = ((addressValue - targetAddress.getOffset()) & 0xFFFC) |
+					(originalValue & 0xFFFF0003);
 
-				memory.setInt(targetAddress, (int)writeValue, true);
+				memory.setInt(targetAddress, (int) writeValue, true);
 				break;
 
 			default:
-				Msg.warn(this, String.format("Relocations: Unsupported relocation type %X", relocationType));
+				Msg.warn(RSOProgramBuilder.class, String.format("Relocations: Unsupported relocation type %X", relocationType));
 				break;
 		}
 
 		long newValue = memory.getInt(targetAddress) & 0xFFFFFFFFL;
-		relocationTable.add(targetAddress, Status.APPLIED, relocationType, new long[] { newValue },
-				Ints.toByteArray(originalValue), symbolName);
+		program.getRelocationTable().add(targetAddress, Status.APPLIED, relocationType, new long[]{newValue},
+			Ints.toByteArray(originalValue), symbolName);
 	}
 
-	private Address translatePhysicalAddress(long physicalAddress) {
+	private static Address translatePhysicalAddress(RSOHeader rso, long physicalAddress, Address[] sectionsAddress) {
 		SectionInfo sectionInRange = null;
 		int sectionIndex = -1;
 		for (var s = 0; s < rso.sections.length; ++s) {
@@ -341,7 +325,7 @@ public class RSOProgramBuilder {
 
 		if (sectionInRange == null) {
 			throw new AddressOutOfBoundsException(String.format("Physical address `%08X` is not in range of a section",
-					physicalAddress));
+				physicalAddress));
 		}
 
 		// Calculate offset, relative to the section address
@@ -353,57 +337,56 @@ public class RSOProgramBuilder {
 		return virtualSectionAddress.add(offset);
 	}
 
-	private void applySymbol(String mangled, Address symbolAddress, DemanglerOptions demanglerOptions, int symbolSize,
-							 boolean createThunkFunction) {
+	private static void applySymbol(Program program, String mangled, Address symbolAddress, DemanglerOptions demanglerOptions, int symbolSize,
+									boolean createThunkFunction, TaskMonitor monitor) {
 		// Demangle the name using CodeWarriors scheme.
 		DemangledObject demangledNameObject = null;
 		try {
 			demangledNameObject = CodeWarriorDemangler.demangleSymbol(mangled);
-		} catch(Exception e) {
+		} catch (Exception e) {
 			// TODO(jstpierre): Investigate the failed demanglings. Sometimes these are literal symbols.
-			demangledNameObject = null;
 		}
 
+		var symbolTable = program.getSymbolTable();
+		var globalNamespace = program.getGlobalNamespace();
 		var demangledName = demangledNameObject == null ? mangled : demangledNameObject.getName();
 
 		try {
 			symbolTable.createLabel(symbolAddress, demangledName, globalNamespace, SourceType.ANALYSIS);
 
 			// If it's a function, create it.
-			var block = this.program.getMemory().getBlock(symbolAddress);
+			var block = program.getMemory().getBlock(symbolAddress);
 
 			// TODO(InsualZ): Is this correct?
 			var isFunction = demangledNameObject instanceof DemangledFunction;
 
 			if ((isFunction || createThunkFunction) && symbolSize > 3 && block != null && block.isExecute() &&
-					!block.getName().equals("RAM")) {
+				!block.getName().equals("RAM")) {
 				var addressSet = new AddressSet(symbolAddress, symbolAddress.add(symbolSize - 1));
 				try {
-					var functionManager = this.program.getFunctionManager();
+					var functionManager = program.getFunctionManager();
 					var function = functionManager.createFunction(demangledName, globalNamespace,
-							symbolAddress, addressSet, SourceType.ANALYSIS);
+						symbolAddress, addressSet, SourceType.ANALYSIS);
 
 					if (createThunkFunction) {
 						functionManager.createThunkFunction(demangledName, globalNamespace, symbolAddress, addressSet,
-								function, SourceType.ANALYSIS);
+							function, SourceType.ANALYSIS);
 					}
+				} catch (OverlappingFunctionException ignored) {
 				}
-				catch (OverlappingFunctionException ignored) {}
 			}
 
 			// Try applying the function arguments & return type using the demangled info.
 			if (demangledNameObject != null) {
 				try {
 					demangledNameObject.applyTo(program, symbolAddress, demanglerOptions, monitor);
-				}
-				catch (Exception e) {
+				} catch (Exception e) {
 					e.printStackTrace();
 				}
 			}
-		}
-		catch (InvalidInputException e) {
-			Msg.error(this, "RSO Program Builder: An error occurred when attempting to load symbol: " +
-					mangled);
+		} catch (InvalidInputException e) {
+			Msg.error(RSOProgramBuilder.class, "RSO Program Builder: An error occurred when attempting to load symbol: " +
+				mangled);
 		}
 	}
 
@@ -412,31 +395,30 @@ public class RSOProgramBuilder {
 		if ((address & inverse) != 0) {
 			address = (address + inverse) & ~inverse;
 		}
-		
+
 		return address;
 	}
 
-	private MemoryBlock createExternalBlock(Memory memory, Address sectionOffset, long size) {
+	private static MemoryBlock createExternalBlock(Loader.ImporterSettings settings, Memory memory, Address sectionOffset, long size) {
 		try {
-				var block = memory.createUninitializedBlock(MemoryBlock.EXTERNAL_BLOCK_NAME,
-					sectionOffset, size, false);
+			var block = memory.createUninitializedBlock(MemoryBlock.EXTERNAL_BLOCK_NAME,
+				sectionOffset, size, false);
 
 			// assume any value in external is writable.
 			block.setWrite(true);
-			block.setSourceName(this.binaryName);
+			block.setSourceName(settings.provider().getName());
 			block.setComment(
-					"NOTE: This block is artificial and is used to make relocations work correctly");
+				"NOTE: This block is artificial and is used to make relocations work correctly");
 
 			return block;
-		}
-		catch (Exception e) {
-			this.log.appendMsg("Error creating external memory block: " + " - " + getMessage(e));
+		} catch (Exception e) {
+			settings.log().appendMsg("Error creating external memory block: " + " - " + getMessage(e));
 		}
 
 		return null;
 	}
 
-	private String getMessage(Exception e) {
+	private static String getMessage(Exception e) {
 		String msg = e.getMessage();
 		if (msg == null) {
 			msg = e.toString();
