@@ -22,7 +22,7 @@ import ghidra.program.model.symbol.Symbol;
 import ghidra.util.Msg;
 import ghidra.util.filechooser.ExtensionFileFilter;
 import org.apache.commons.io.FilenameUtils;
-import org.python.google.common.primitives.Ints;
+import com.google.common.primitives.Ints;
 
 import java.io.File;
 import java.io.FileReader;
