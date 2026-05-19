@@ -23,7 +23,7 @@ import ghidra.util.Msg;
 import ghidra.util.exception.InvalidInputException;
 import ghidra.util.task.TaskMonitor;
 import org.apache.commons.io.FilenameUtils;
-import org.python.google.common.primitives.Ints;
+import com.google.common.primitives.Ints;
 
 import java.io.IOException;
 

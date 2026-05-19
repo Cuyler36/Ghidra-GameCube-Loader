@@ -100,38 +100,33 @@ public class RSOHeader {
     }
 
     public boolean IsValid(BinaryReader reader) {
-        try {
-            long fileSize = reader.length();
+        long fileSize = reader.length();
 
-            // Check section info is valid first.
-            if (this.sectionInfoOffset > fileSize) {
-                Msg.error(this, "Unable to load RSO file! Reason: Section Info Table address is past file bounds!");
-                return false;
-            }
-
-            // Check that the internal relocation data offset is valid
-            if (this.internalRelOffset >= fileSize) {
-                Msg.error(this, "Unable to load RSO file! Reason: Internal Relocation Data offset in header is past the file bounds!");
-                return false;
-            }
-
-            // Check that the external relocation data offset is valid
-            if (this.externalRelOffset >= fileSize) {
-                Msg.error(this, "Unable to load RSO file! Reason: External Relocation Data offset in header is past the file bounds!");
-                return false;
-            }
-
-            if (this.importSymbolTableOffset + this.importSymbolTableSize > fileSize) {
-                Msg.error(this, "Unable to load RSO file! Reason: Import Symbol Table offset + Import Symbol Table size in header is past the file bounds!");
-                return false;
-            }
-
-            if (this.exportSymbolTableOffset + this.exportSymbolTableSize > fileSize) {
-                Msg.error(this, "Unable to load RSO file! Reason: Export Symbol Table offset + Export Symbol Table size in header is past the file bounds!");
-                return false;
-            }
+        // Check section info is valid first.
+        if (this.sectionInfoOffset > fileSize) {
+            Msg.error(this, "Unable to load RSO file! Reason: Section Info Table address is past file bounds!");
+            return false;
         }
-        catch (IOException e) {
+
+        // Check that the internal relocation data offset is valid
+        if (this.internalRelOffset >= fileSize) {
+            Msg.error(this, "Unable to load RSO file! Reason: Internal Relocation Data offset in header is past the file bounds!");
+            return false;
+        }
+
+        // Check that the external relocation data offset is valid
+        if (this.externalRelOffset >= fileSize) {
+            Msg.error(this, "Unable to load RSO file! Reason: External Relocation Data offset in header is past the file bounds!");
+            return false;
+        }
+
+        if (this.importSymbolTableOffset + this.importSymbolTableSize > fileSize) {
+            Msg.error(this, "Unable to load RSO file! Reason: Import Symbol Table offset + Import Symbol Table size in header is past the file bounds!");
+            return false;
+        }
+
+        if (this.exportSymbolTableOffset + this.exportSymbolTableSize > fileSize) {
+            Msg.error(this, "Unable to load RSO file! Reason: Export Symbol Table offset + Export Symbol Table size in header is past the file bounds!");
             return false;
         }
 
