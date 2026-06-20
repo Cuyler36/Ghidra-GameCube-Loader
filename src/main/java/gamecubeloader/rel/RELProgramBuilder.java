@@ -235,7 +235,7 @@ public final class RELProgramBuilder {
 						try {
 							var stream = relInfo.reader.getByteProvider().getInputStream(offs);
 							MemoryBlockUtils.createInitializedBlock(program, false, blockName, addressSpace.getAddress(section.address),
-								stream, section.size, "", null, true, true, isText, null, settings.monitor());
+								stream, section.size, "", null, true, true, isText, settings.log(), settings.monitor());
 						} catch (IOException | AddressOverflowException e) {
 							throw new LoadException(String.format("Failed to create memory block %s for module %s", blockName, relInfo.name), e);
 						}
@@ -285,7 +285,7 @@ public final class RELProgramBuilder {
 				}
 
 				MemoryBlockUtils.createUninitializedBlock(program, false, relInfo.name + "_.uninitialized0", addressSpace.getAddress(currentOutputAddress), relInfo.header.bssSize,
-					"", null, true, true, false, null);
+					"", null, true, true, false, settings.log());
 
 				// Set the bss virtual memory address.
 				relInfo.header.sections[relInfo.header.bssSectionId].address = currentOutputAddress;

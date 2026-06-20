@@ -110,7 +110,7 @@ public class RSOProgramBuilder {
 			var bssSectionAddress = addressSpace.getAddress(currentOutputAddress);
 			MemoryBlockUtils.createUninitializedBlock(program, false,
 				blockNamePrefix + ".bss", bssSectionAddress, rsoModule.header.bssSize, "", null,
-				true, true, false, null);
+				true, true, false, settings.log());
 
 			// Set the bss virtual memory address.
 			sectionsAddress[rsoModule.header.bssSection] = bssSectionAddress;
