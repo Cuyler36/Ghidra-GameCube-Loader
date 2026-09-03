@@ -15,7 +15,7 @@ jobs:
     - uses: antoniovazquezblanco/setup-ghidra@v2.0.16
       with:
         auth_token: ${{ secrets.GITHUB_TOKEN }}
-        version: '12.1'
+        version: '12.1.3'
     - name: Execute Gradle build
       run: ./gradlew -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
     - name: Release
