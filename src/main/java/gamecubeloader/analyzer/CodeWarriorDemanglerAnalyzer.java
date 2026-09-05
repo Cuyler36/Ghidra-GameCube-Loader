@@ -20,10 +20,9 @@ public class CodeWarriorDemanglerAnalyzer extends AbstractDemanglerAnalyzer {
         "After a function is created, this analyzer will attempt to demangle " +
             "the name and apply datatypes to parameters.";
 
-    private CodeWarriorDemangler demangler = new CodeWarriorDemangler();
-
     public CodeWarriorDemanglerAnalyzer() {
         super(NAME, DESCRIPTION);
+        this.demangler = new CodeWarriorDemangler();
         setDefaultEnablement(true);
     }
 
