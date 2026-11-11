@@ -11,11 +11,11 @@ jobs:
     - uses: actions/setup-java@v5
       with:
         distribution: 'temurin'
-        java-version: '21'
+        java-version: '25'
     - uses: antoniovazquezblanco/setup-ghidra@v2.0.16
       with:
         auth_token: ${{ secrets.GITHUB_TOKEN }}
-        version: '12.1'
+        version: '12.2'
     - name: Execute Gradle build
       run: ./gradlew -PGHIDRA_INSTALL_DIR=${{ env.GHIDRA_INSTALL_DIR }}
     - name: Release
