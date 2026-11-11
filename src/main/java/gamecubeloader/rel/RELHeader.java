@@ -100,18 +100,18 @@ public class RELHeader {
 
 			// Check section info is valid first.
 			if (this.sectionTableOffset > fileSize) {
-				Msg.error(this, "Unable to load REL file! Reason: Section Info Table address is past file bounds!");
+				Msg.debug(this, "Unable to load REL file! Reason: Section Info Table address is past file bounds!");
 				return false;
 			}
 
 			// Check that the relocation data offset & import info offset are valid offsets in the file.
 			if (this.relocationTableOffset >= fileSize) {
-				Msg.error(this, "Unable to load REL file! Reason: Relocation Data offset in header is past the file bounds!");
+				Msg.debug(this, "Unable to load REL file! Reason: Relocation Data offset in header is past the file bounds!");
 				return false;
 			}
 
 			if (this.importTableOffset + this.importTableSize > fileSize) {
-				Msg.error(this, "Unable to load REL file! Reason: Import Table offset + Import Table size in header is past the file bounds!");
+				Msg.debug(this, "Unable to load REL file! Reason: Import Table offset + Import Table size in header is past the file bounds!");
 				return false;
 			}
 
@@ -134,7 +134,7 @@ public class RELHeader {
 
 			// Ensure that the section table offset doesn't intersect the first section's data.
 			if (this.sectionTableOffset + sectionTableSize > firstSectionInFileAddress) {
-				Msg.error(this, "Unable to load REL file! Reason: Section Info Table intersects section data!");
+				Msg.debug(this, "Unable to load REL file! Reason: Section Info Table intersects section data!");
 				return false;
 			}
 

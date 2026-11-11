@@ -2,6 +2,7 @@ package gamecubeloader.dol;
 
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
+import gamecubeloader.common.Prompts;
 import gamecubeloader.common.SymbolLoader;
 import gamecubeloader.common.SystemMemorySections;
 import ghidra.app.util.MemoryBlockUtils;
@@ -71,7 +72,7 @@ public final class DOLProgramBuilder {
 				32, dol.bssMemoryAddress);
 		}
 
-		if (mapLoadedResult != null && !mapLoadedResult.loaded) {
+		if (mapLoadedResult != null && !mapLoadedResult.loaded && Prompts.canPrompt()) {
 			if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this DOL executable?", "Yes", "No", null) == 1) {
 				var fileChooser = new GhidraFileChooser(null);
 				fileChooser.setCurrentDirectory(provider.getFile().getParentFile());

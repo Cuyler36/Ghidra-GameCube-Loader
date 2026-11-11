@@ -2,6 +2,7 @@ package gamecubeloader.ramdump;
 
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
+import gamecubeloader.common.Prompts;
 import gamecubeloader.common.SymbolLoader;
 import gamecubeloader.common.SystemMemorySections;
 import ghidra.app.util.MemoryBlockUtils;
@@ -32,7 +33,7 @@ public final class RAMDumpProgramBuilder {
 		}
 
 		/* Optionally load symbol map */
-		if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this RAM dump?", "Yes", "No", null) == 1) {
+		if (Prompts.canPrompt() && OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", "Would you like to load a symbol map for this RAM dump?", "Yes", "No", null) == 1) {
 			var fileChooser = new GhidraFileChooser(null);
 			fileChooser.setCurrentDirectory(provider.getFile().getParentFile());
 			fileChooser.addFileFilter(new ExtensionFileFilter("map", "Symbol Map Files"));

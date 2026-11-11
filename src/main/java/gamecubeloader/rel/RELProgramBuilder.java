@@ -3,6 +3,7 @@ package gamecubeloader.rel;
 import docking.widgets.OptionDialog;
 import docking.widgets.filechooser.GhidraFileChooser;
 import gamecubeloader.common.SymbolInfo;
+import gamecubeloader.common.Prompts;
 import gamecubeloader.common.SymbolLoader;
 import gamecubeloader.common.SystemMemorySections;
 import gamecubeloader.common.Yaz0;
@@ -196,7 +197,7 @@ public final class RELProgramBuilder {
 			relBaseAddress = currentOutputAddress;
 
 			// If we're using manually specified memory addresses, ask the user where they want this file to be loaded.
-			if (specifyModuleMemAddrs) {
+			if (specifyModuleMemAddrs && Prompts.canPrompt()) {
 				// TODO: Check against addresses already containing memory sections.
 				var setValidAddress = false;
 				while (!setValidAddress) {
@@ -257,7 +258,7 @@ public final class RELProgramBuilder {
 
 			// Add bss section.
 			if (relInfo.header.bssSize != 0 && relInfo.header.bssSectionId != 0) {
-				if (specifyModuleMemAddrs) {
+				if (specifyModuleMemAddrs && Prompts.canPrompt()) {
 					// TODO: Check against addresses already containing memory sections.
 					var setValidAddress = false;
 					while (!setValidAddress) {
@@ -328,7 +329,7 @@ public final class RELProgramBuilder {
 				}
 			}
 
-			if (mapLoadedResult != null && !mapLoadedResult.loaded) {
+			if (mapLoadedResult != null && !mapLoadedResult.loaded && Prompts.canPrompt()) {
 				// Ask if the user wants to load a symbol map file.
 				if (OptionDialog.showOptionNoCancelDialog(null, "Load Symbols?", String.format("Would you like to load a symbol map for the relocatable module %s?", relInfo.name),
 					"Yes", "No", null) == 1) {
